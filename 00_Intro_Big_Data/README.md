@@ -182,6 +182,8 @@ Components:
 - Spark MLlib: low level ML library.
 - Spark GraphX: for network related data, like social networks, etc; we can do graph-based processing.
 
+![Spark Architecture](./pics/spark_architecture.jpeg)
+
 ### Spark Core
 
 Spark doesn't have a storage system, but in relies on existing file storage systems, e.g., HDFS (Hadoop).
