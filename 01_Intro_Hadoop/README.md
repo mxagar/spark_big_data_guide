@@ -19,6 +19,11 @@ Table of contents:
     - [Application Examples](#application-examples)
   - [3. MapReduce Code Example](#3-mapreduce-code-example)
   - [4. MapReduce Design Patterns](#4-mapreduce-design-patterns)
+    - [Overview of Patterns](#overview-of-patterns)
+    - [Filtering Patterns](#filtering-patterns)
+    - [Summarization Patterns](#summarization-patterns)
+      - [Combiners](#combiners)
+    - [Structural Patterns](#structural-patterns)
 
 
 ## 1. Big Data
@@ -258,4 +263,83 @@ if oldKey != None:
 ```
 
 ## 4. MapReduce Design Patterns
+
+In general, problems can be classified into classes of problems; for each class, we can apply boilerplate solutions. These are the so called *design patterns*.
+
+Lecture videos:
+
+- [Overview of Patterns](https://www.youtube.com/watch?v=eSPfyzVrL98)
+- [Filtering Patterns](https://www.youtube.com/watch?v=x4zg5mDoZRo)
+- [Summarization Patterns](https://www.youtube.com/watch?v=9-ZXELXsyWI)
+- [Finding the Mean](https://www.youtube.com/watch?v=KeEkD8KTpJs)
+- [Combiners](https://www.youtube.com/watch?v=aCwPIue7k2o)
+- [Structural Patterns](https://www.youtube.com/watch?v=uhvwbYresdA)
+
+### Overview of Patterns
+
+There are 3 major pattern types:
+
+- Filtering Patterns
+  - Sampling data
+  - Generate top-n lists
+- Summarization Patterns
+  - Counting records
+  - Finding statistics: min, max, mean, median, etc.
+  - Create an index
+- Structural Patterns
+  - Combining 2 datasets
+
+The idea is to learn to recognize the patterns; then, at work, we identify them and *look* for a solution in Google using the pattern keyword!
+
+Other types of patterns are:
+
+- Organizational
+- Input/Output
+- etc.
+
+### Filtering Patterns
+
+They have one thing in common: they don't change the data. A function that filters, goes through all the records (in parallel) and selects records according to the filter we have:
+
+- Simple filter: take record if given condition is satisfied, e.g., sale bigger than 100 USD.
+- [Bloom filter](https://en.wikipedia.org/wiki/Bloom_filter): efficient probabilistic filter which returns records which are "possibly in set" or "definitely not in set".
+- Sampling: take 1 every 2 records.
+- Random sampling.
+- Top-n: take top 10 sale records.
+
+![Filtering Patterns](./pics/filtering_patterns.jpg)
+
+### Summarization Patterns
+
+Summarization procedures give a high-level overview of our data; we distinguish two major types:
+
+- Inverted index: like the index of a book, or the index that Google does when crawling the web. In a book, we have key terms at the end and the page numbers where they appear.
+- Numerical summarizations: word/record count, min/max, first/last, mean/median, etc.
+
+In numerical summarizations the key is the element we'd like to summarize (e.g., a word, field, etc.) and the value is the summary operation.
+
+Frequently, in those kind of numerical summarizations,
+
+- the mapper collects key-value pairs
+- the reducer performs all the math.
+
+Example: we have the logs of all web events, among which are sales. We'd like to know if there is a correlation between the day of the week and the sales. To that end, we need to parse all logs, select sales entries and:
+
+- the mapper creates dictionaries with `day-of-the-week: sales`, i.e., `Moday: 5.20`,
+- the reducers collect each of the `day-of-the-week` keys and compute the mean and the standard deviation, among others; e.g., keep sum and count, and then divide.
+
+#### Combiners
+
+Combiners are processes than happen between the mapper and the reducer; specifically, the node where the mapping is carried out also combines the mapped data, i.e., it reduces it somehow, before sending it to the reducer node.
+
+Example that illustrates the motivation of this: in the logs example from before, it might happen that we have 4M entries for the key `Monday` in one mapper node. Transferring all those `Monday` key-value pairs to a reducer node is a lot of network bandwidth. Instead, it makes sense to combine/reduce those entries, if possible. In this case, it is possible: we can sum and count the values and transfer those combined data to the reducer. The effect is: much less network congestion and much faster execution.
+
+### Structural Patterns
+
+We use this pattern when migrating data, e.g., from a relational database (SQL) to Hadoop. Hadoop can work with data in any format, but if we use data in a SQL database, it is already hierarchically structured, so we can speed up the Hadoop ingestion.
+
+To use this pattern
+
+- the data sources must be linked by foreign keys
+- the data must be structured and row-based.
 
