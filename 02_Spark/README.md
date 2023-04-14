@@ -21,6 +21,7 @@ Table of contents:
     - [Udacity Project Overview](#udacity-project-overview)
     - [Installation and Setup](#installation-and-setup)
   - [2. The Power of Spark](#2-the-power-of-spark)
+    - [Big Data in Numbers](#big-data-in-numbers)
   - [3. Data Wrangling with Spark](#3-data-wrangling-with-spark)
   - [4. Setting up Spark Clusters with AWS](#4-setting-up-spark-clusters-with-aws)
   - [5. Debugging and Optimization](#5-debugging-and-optimization)
@@ -60,7 +61,39 @@ Key ideas of the project:
 Module videos:
 
 - [Introduction to Spark](https://www.youtube.com/watch?v=RWtS_ErlmXE)
+- [What Qualifies As Big Data](https://www.youtube.com/watch?v=tGHCCvKKpuo)
+- [Numbers Everyone Should Know](https://www.youtube.com/watch?v=XGQT-uzt4v8)
+- [Numbers Everyone Should Know: CPU](https://www.youtube.com/watch?v=LNv-urROvr0)
 
+### Big Data in Numbers
+
+Characteristics of Big Data:
+
+- Data stored in several machines, distributed.
+- High volume of data.
+- High speed of data, velocity.
+- High variety of data.
+
+The numbers everyone should know (Peter Norveig, Google): We should learn at least the following hardware-related speed numbers and concepts:
+
+- CPU operation: 0.4 ns
+  - Mutex lock/unlock: 17 ns
+  - Registers store small pieces of data that the CPU is crunching at the moment.
+- Memory (RAM) reference: 100 ns
+  - Read 1 MB sequentially in memory: 3 microsec.
+- Storage: Random read from SSD: 16 microsec.
+  - Read 1 MB sequentially in memory: 49 microsec.
+- Network: Round trip data from EU to US: 150 millisec.
+  - Send 2 KB in local commodity network: 44 ns
+
+![Hardware Numbers](./pics/hardware_numbers.jpg)
+
+![Hardware Numbers: Most Important](./pics/hardware_numbers_important.jpg)
+
+Links:
+
+- [Peter Norveig: Teach Yourself Programming in Ten Years](http://norvig.com/21-days.html)
+- [Interactive: Latency Numbers Every Programmer Should Know](https://colin-scott.github.io/personal_website/research/interactive_latency.html)
 
 ## 3. Data Wrangling with Spark
 
