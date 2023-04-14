@@ -19,6 +19,7 @@ Table of contents:
 - [Spark](#spark)
   - [1. Introduction](#1-introduction)
     - [Udacity Project Overview](#udacity-project-overview)
+    - [Installation and Setup](#installation-and-setup)
   - [2. The Power of Spark](#2-the-power-of-spark)
   - [3. Data Wrangling with Spark](#3-data-wrangling-with-spark)
   - [4. Setting up Spark Clusters with AWS](#4-setting-up-spark-clusters-with-aws)
@@ -40,13 +41,26 @@ Section videos:
 
 Video: [Project Overview](https://www.youtube.com/watch?v=lPCzCEG2yRs)
 
-I made a dedicated repository for the Udacity project: [sparkify_customer_churn](https://github.com/mxagar/sparkify_customer_churn).
+I made a dedicated repository for the Udacity final project: [sparkify_customer_churn](https://github.com/mxagar/sparkify_customer_churn). I have non-committed link to that repository in the folder [`lab`](./lab/); additionally, all coding examples from this module are collected in that folder [`lab`](./lab/).
 
 Key ideas of the project:
 
-- 
+- Music streaming service, similar to Spotify: Users can listen to streamed music.
+- We have: (1) free-tier, (2) subscription plan.
+- Every time an user is involved in an event, it is logged with a timestamp; example events: songplay, logout, like, ad_heard, downgrade, etc.
+- Goal: predict churn, either (1) as downgrade from premium to free or (2) as leaving the service.
+- With churn predictions, the company can target those users with incentives: discounts, etc.
+
+### Installation and Setup
+
+:construction:
 
 ## 2. The Power of Spark
+
+Module videos:
+
+- [Introduction to Spark](https://www.youtube.com/watch?v=RWtS_ErlmXE)
+
 
 ## 3. Data Wrangling with Spark
 
