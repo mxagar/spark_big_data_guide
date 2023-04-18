@@ -28,10 +28,15 @@ Table of contents:
     - [MapReduce](#mapreduce)
     - [Spark Modes](#spark-modes)
     - [Spark Use Cases](#spark-use-cases)
-  - [3. Data Wrangling with Spark](#3-data-wrangling-with-spark)
-  - [4. Setting up Spark Clusters with AWS](#4-setting-up-spark-clusters-with-aws)
-  - [5. Debugging and Optimization](#5-debugging-and-optimization)
-  - [6. Machine Learning with PySpark](#6-machine-learning-with-pyspark)
+  - [3. Introduction to PySpark](#3-introduction-to-pyspark)
+    - [3.1 Setup](#31-setup)
+      - [Install and Run PySpark](#install-and-run-pyspark)
+      - [Running on a Notebook](#running-on-a-notebook)
+    - [](#)
+  - [4. Data Wrangling with Spark](#4-data-wrangling-with-spark)
+  - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
+  - [6. Debugging and Optimization](#6-debugging-and-optimization)
+  - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
 
 ## 1. Introduction
 
@@ -60,7 +65,15 @@ Key ideas of the project:
 
 ### Installation and Setup
 
-:construction:
+There are two major modes to run Spark:
+
+- Locally
+- In a cluster
+
+To leverage the power of distributed system for big data, we need to use the cluster-mode; however, by running Spark on our desktop computer (i.e., locally on one machine) helps test an learn the framework.
+
+- To see how to install and use PySpark locally, check Section [3. Introduction to PySpark](#3-introduction-to-pyspark).
+- To set a Spark cluster on AWS, check Section [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws).
 
 ## 2. The Power of Spark
 
@@ -238,13 +251,119 @@ Limitations of Spark:
 - Deep learning is not available, but there are projects which integrate, e.g., Spark with Tensorflow.
 - Machine learning algorithms that scale linearly with data are possible only.
 
-## 3. Data Wrangling with Spark
+## 3. Introduction to PySpark
+
+This section is based on the Datacamp course [Introduction to PySpark](https://app.datacamp.com/learn/courses/introduction-to-pyspark).
+
+The code and notebooks of this section are in [`lab/02_Intro_PySpark`](./lab/02_Intro_PySpark).
+
+### 3.1 Setup
+
+#### Install and Run PySpark
+
+To install PySpark locally:
+
+```bash
+conda activate ds # select an environment
+pip install pyspark
+pip install findspark
+```
+
+We can launch a Spark session in the Terminal locally as follows:
+
+```bash
+conda activate ds
+pyspark
+# SparkContext available as 'sc'
+# Web UI at: http://localhost:4040/
+# SparkSession available as 'spark'
+
+sc # <SparkContext master=local[*] appName=PySparkShell>
+sc.version # '3.4.0'
+
+# Now, we execute the scripts we want, which are using the sc SparkContext
+
+```
+
+An example script can be:
+
+```python
+import random
+num_samples = 100000000
+def inside(p):
+    x, y = random.random(), random.random()
+    return x*x + y*y < 1
+
+# Note that sc is not imported, but it's already available
+# This will execute the function inside() with spark
+# It might take some time if run locally, because Spark is optimized
+# for large and distributed datasets
+count = sc.parallelize(range(0, num_samples)).filter(inside).count()
+pi = 4 * count / num_samples
+
+print(pi)
+sc.stop()
+```
+
+#### Running on a Notebook
+
+If we want to use PySpark on a Jupyter notebook, we need to change the environment variables in `~/.bashrc` or `~/.zshrc`:
+
+```bash
+export PYSPARK_DRIVER_PYTHON=jupyter
+export PYSPARK_DRIVER_PYTHON_OPTS='notebook'
+```
+
+Then, we restart `pyspark` and launch jupyter from it:
+
+```bash
+conda activate ds
+pyspark
+jupyter
+```
+
+**Alternatively**, we can use `findspark` without modifying the environment variables and without starting pyspark from outside:
+
+```bash
+conda activate ds
+jupyter lab
+```
+
+Then, the notebook could contain the code as follows:
+
+```python
+import findspark
+findspark.init()
+
+import pyspark
+import random
+
+sc = pyspark.SparkContext(appName="Pi") # AppName: Pi
+num_samples = 100000000
+
+def inside(p):     
+    x, y = random.random(), random.random()
+    return x*x + y*y < 1
+
+# This will execute the function inside() with spark
+# It might take some time if run locally, because Spark is optimized
+# for large and distributed datasets
+count = sc.parallelize(range(0, num_samples)).filter(inside).count()
+pi = 4 * count / num_samples
+
+print(pi) # 3.14185392
+sc.stop()
+```
+
+### 
+
+## 4. Data Wrangling with Spark
 
 
-## 4. Setting up Spark Clusters with AWS
+## 5. Setting up Spark Clusters with AWS
 
 
-## 5. Debugging and Optimization
+## 6. Debugging and Optimization
 
 
-## 6. Machine Learning with PySpark
+## 7. Machine Learning with PySpark
