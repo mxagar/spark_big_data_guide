@@ -193,6 +193,8 @@ MapReduce is a way of processing data in parallel; for instance, we have a large
 - Then, all tuples are **shuffled**, i.e., all pairs with the same key are packed together.
 - Finally, all stacked pairs are aggregated: we count the number of pairs for each key.
 
+Example: [`lab/01_map_reduce/`](./lab/01_map_reduce/).
+
 ![MapReduce Process](./pics/map_reduce_process.jpg)
 
 ### Spark Modes
