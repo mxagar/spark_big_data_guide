@@ -26,7 +26,8 @@ Table of contents:
     - [Big Data in Numbers](#big-data-in-numbers)
     - [Hadoop and Spark](#hadoop-and-spark)
     - [MapReduce](#mapreduce)
-    - [Spark Clusters](#spark-clusters)
+    - [Spark Modes](#spark-modes)
+    - [Spark Use Cases](#spark-use-cases)
   - [3. Data Wrangling with Spark](#3-data-wrangling-with-spark)
   - [4. Setting up Spark Clusters with AWS](#4-setting-up-spark-clusters-with-aws)
   - [5. Debugging and Optimization](#5-debugging-and-optimization)
@@ -194,14 +195,52 @@ MapReduce is a way of processing data in parallel; for instance, we have a large
 
 ![MapReduce Process](./pics/map_reduce_process.jpg)
 
-### Spark Clusters
+### Spark Modes
 
+Spark can work in two major modes:
+
+- Local-mode: we install Spark on our computer and do everything there.
+- Cluster-mode: we create a cluster of nodes and leverage the distributed computing capabilities for big data.
+
+Obviously, we want to use the cluster-mode; the local-mode is used to learn and test our implementations.
+
+Additionally, we have:
+
+- A **master node**, which has the **driver program**, and within it sits the **SparkContext**. We always have and interact with the Spark context.
+- The Spark context talks to the **cluster manager**, which is outside from the **master node**. That manager can be, for instance Yarn and it takes care of the resource distribution.
+- The **cluster manager** handles the **worker nodes**, which are independent from the manager and are usually distributed. It requests containers with certain capacities within them depending on the workload.
+
+In the cluster-mode, we can have several cluster managers:
+
+- Stand-alone, i.e., Spark itself.
+- Apache Mesos.
+- Hadoop Yarn.
+- Kubernetes.
 
 ![Spark Modes](./pics/spark_modes.jpg)
 
+![Spark Architecture](../00_Intro_Big_Data/pics/spark_architecture.jpeg)
+
+### Spark Use Cases
+
+Typical usage with large, distributed datasets:
+
+- [Data analytics](https://spark.apache.org/sql/)
+- [Machine learning](https://spark.apache.org/mllib/)
+- [Streaming](https://spark.apache.org/streaming/)
+- [Graph analytics](https://spark.apache.org/graphx/)
+
+Limitations of Spark:
+
+- Streaming has a latency of 500 ms; faster alternatives are: [Apache Storm](https://storm.apache.org), [Apex](https://apex.apache.org), [Flink](https://flink.apache.org).
+- Deep learning is not available, but there are projects which integrate, e.g., Spark with Tensorflow.
+- Machine learning algorithms that scale linearly with data are possible only.
+
 ## 3. Data Wrangling with Spark
 
+
 ## 4. Setting up Spark Clusters with AWS
+
 
 ## 5. Debugging and Optimization
 
