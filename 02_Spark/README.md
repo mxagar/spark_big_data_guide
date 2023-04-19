@@ -29,10 +29,17 @@ Table of contents:
     - [Spark Modes](#spark-modes)
     - [Spark Use Cases](#spark-use-cases)
   - [3. Introduction to PySpark](#3-introduction-to-pyspark)
-    - [3.1 Setup](#31-setup)
-      - [Install and Run PySpark](#install-and-run-pyspark)
-      - [Running on a Notebook](#running-on-a-notebook)
-    - [](#)
+    - [3.1 Basics: Getting to know PySpark](#31-basics-getting-to-know-pyspark)
+      - [3.1.1 Setup](#311-setup)
+        - [Install and Run PySpark](#install-and-run-pyspark)
+        - [Running on a Notebook](#running-on-a-notebook)
+      - [3.1.2 Creating a Spark Session](#312-creating-a-spark-session)
+      - [3.1.3 Spark SQL Dataframes: Uploading and Consulting](#313-spark-sql-dataframes-uploading-and-consulting)
+      - [3.1.4 Common Methods and Attributes of the SQL Dataframe](#314-common-methods-and-attributes-of-the-sql-dataframe)
+      - [3.1.5 SQL Queries](#315-sql-queries)
+      - [3.1.6 Pandafying: Convert a Spark SQL Dataframe into a Pandas Dataframe](#316-pandafying-convert-a-spark-sql-dataframe-into-a-pandas-dataframe)
+      - [3.1.7 Sparkifying: Convert a Pandas Dataframe into a Spark SQL Dataframe](#317-sparkifying-convert-a-pandas-dataframe-into-a-spark-sql-dataframe)
+    - [3.2 Manipulating Data](#32-manipulating-data)
   - [4. Data Wrangling with Spark](#4-data-wrangling-with-spark)
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
@@ -253,13 +260,24 @@ Limitations of Spark:
 
 ## 3. Introduction to PySpark
 
-This section is based on the Datacamp course [Introduction to PySpark](https://app.datacamp.com/learn/courses/introduction-to-pyspark).
+This section is based on the Datacamp course [Introduction to PySpark](https://app.datacamp.com/learn/courses/introduction-to-pyspark). The course has the following chapters:
+
+1. Basics: Getting to know PySpark
+2. Manipulating data
+3. Getting started with machine learning pipelines
+4. Model tuning and selection
 
 The code and notebooks of this section are in [`lab/02_Intro_PySpark`](./lab/02_Intro_PySpark).
 
-### 3.1 Setup
+### 3.1 Basics: Getting to know PySpark
 
-#### Install and Run PySpark
+This entire section is contained in one single notebook and objects in one subsection might be defined in subsections prior to it.
+
+The notebook: [`01_Basics.ipynb`](./lab/02_Intro_PySpark/01_Basics.ipynb).
+
+#### 3.1.1 Setup
+
+##### Install and Run PySpark
 
 To install PySpark locally:
 
@@ -305,7 +323,7 @@ print(pi)
 sc.stop()
 ```
 
-#### Running on a Notebook
+##### Running on a Notebook
 
 If we want to use PySpark on a Jupyter notebook, we need to change the environment variables in `~/.bashrc` or `~/.zshrc`:
 
@@ -355,7 +373,173 @@ print(pi) # 3.14185392
 sc.stop()
 ```
 
-### 
+#### 3.1.2 Creating a Spark Session
+
+Creating multiple `SparkSession`s and `SparkContext`s can cause issues, use the `SparkSession.builder.getOrCreate()` method instead, which returns an existing `SparkSession` if there's already one in the environment, or creates a new one if necessary. Usually, in a notebook, we run first
+
+```python
+import findspark
+findspark.init()
+```
+
+And then, we create a session and work with it:
+
+```python
+# Import SparkSession from pyspark.sql
+from pyspark.sql import SparkSession
+
+# Create or get a (new) SparkSession: session
+session = SparkSession.builder.getOrCreate()
+
+# Print session: our SparkSession
+print(session) # <pyspark.sql.session.SparkSession object at 0x7f8128abd210>
+```
+
+If we shut down the notebook/kernel, the session disappears.
+
+#### 3.1.3 Spark SQL Dataframes: Uploading and Consulting
+
+One of the advantages of Spark is that we can consult the data one the cluster with SQL-like queries. To that end, first we need to upload the data and check that it's accessible. Here, a CSV file is uploaded to Spark and registered as a temporary table view in the `session`. The resulting object we get in the Python environment is a Spark SQL dataframe. In later sections, instead of directly reading from CSV files, Pandas dataframes are converted to Spark SQL dataframes.
+
+```python
+# Print the tables in the catalog
+# catalog provides access to all the data inside the cluster
+# catalog.listTables() lists all tables
+# Currently, there is no data on the cluster
+print(session.catalog.listTables()) # []
+
+# Load the CSV file as a DataFrame
+# We use the SparkSession
+# We get back flights_df, which is a Spark SQL dataframe.
+# NOTE: It is also possible to convert a Pandas dataframe into a Spark SQL Dataframe,
+# shown later
+flights_df = session.read.csv("../data/flights_small.csv", header=True, inferSchema=True)
+
+# Register the DataFrame as a temporary view.
+# This allows us to query the data using SQL-like syntax in the used session.
+# Notes:
+# - The contents in flights_df are not registered in the session catalog, by default!
+# - flights_df is linked to the session
+# - We create a temporary view of flights_df named flights in the catalog
+flights_df.createOrReplaceTempView("flights")
+
+# Print the list of tables in the SparkSession/catalog
+print(session.catalog.listTables())
+# [Table(name='flights', catalog=None, namespace=[], description=None, tableType='TEMPORARY', isTemporary=True)]
+
+# We can loop the table names
+for t in session.catalog.listTables():
+    print(t.name)
+
+# Once we know the name of a table, we can get its
+# Spark SQL Dataframe as follows
+flights_df_ = session.table("flights")
+
+# Equivalent to .head(2) on flights_df
+flights_df.show(2)
+
+# Equivalent to .head(2) on second flights_df_: It's the same table
+flights_df_.show(2)
+```
+
+#### 3.1.4 Common Methods and Attributes of the SQL Dataframe
+
+You can use several attributes and methods of the `flights_df` DataFrame object to explore the data. Here are some of the most important ones (ficticious column values):
+
+- `printSchema()`: This method prints the schema of the DataFrame, which shows the column names and their data types.
+
+- `show()`: This method displays the first n rows of the DataFrame in a tabular format. You can specify the number of rows to show using the n parameter (default is 20). For example, `flights_df.show(5)` will show the first 5 rows of the DataFrame.
+
+- `head()`: This method returns the first n rows of the DataFrame as a list of Row objects. You can specify the number of rows to return using the n parameter (default is 1).
+
+- `count()`: This method returns the number of rows in the DataFrame.
+
+- `columns`: This attribute returns a list of the column names in the DataFrame.
+
+- `dtypes`: This attribute returns a list of tuples, where each tuple contains the column name and its data type
+
+- `describe()`: This method computes summary statistics for the numerical columns in the DataFrame, such as count, mean, standard deviation, minimum, and maximum values.
+
+- `select()`: This method allows you to select one or more columns from the DataFrame. For example, `flights_df.select("origin", "dest").show()` will display the "origin" and "dest" columns of the DataFrame.
+
+- `filter()`: This method allows you to filter the rows of the DataFrame based on a condition. For example, `flights_df.filter(flights_df["delay"] > 0).show()` will display the rows where the "delay" column is greater than 0.
+
+- `groupBy()`: This method allows you to group the rows of the DataFrame by one or more columns and perform an aggregation operation, such as sum, count, or average. For example, `flights_df.groupBy("origin").count().show()` will display the number of flights for each origin airport.
+
+- `agg()`: This method allows you to perform one or more aggregation operations on the DataFrame. For example, `flights_df.agg({"delay": "mean", "distance": "max"}).show()` will display the mean delay and maximum distance of all flights in the DataFrame.
+
+- `join()`: This method allows you to join two DataFrames based on a common column. For example, `flights_df.join(airports_df, flights_df["dest"] == airports_df["iata"]).show()` will join the "flights_df" DataFrame with the "airports_df" DataFrame on the "dest" column.
+
+#### 3.1.5 SQL Queries
+
+One of the big advantages of Spark is that we can access the data on the cluster using SQL-like queries! We get as response a Spark SQL dataframe.
+
+```python
+# SQL query
+query = "FROM flights SELECT * LIMIT 10"
+
+# Get the first 10 rows of flights
+# The returning object is a Spark SQL dataframe, as flights_df
+# but this time it contains only 10 rows
+flights10 = session.sql(query)
+
+# Show the results: equivalent to the pandas .head(20)
+flights10.show()
+```
+
+#### 3.1.6 Pandafying: Convert a Spark SQL Dataframe into a Pandas Dataframe
+
+Sometimes, it is more convenient to work **locally** with a Pandas dataframe! A common use-case is when we have computed a table with aggregated values, for instance.
+
+```python
+# SQL query
+query = "SELECT origin, dest, COUNT(*) as N FROM flights GROUP BY origin, dest"
+
+# Run the query
+flight_counts = session.sql(query)
+
+# Convert the results to a pandas DataFrame
+pd_counts = flight_counts.toPandas()
+
+# Print the head of pd_counts
+pd_counts.head()
+# 	origin	dest	N
+# 0	SEA	    RNO	  8
+# 1	SEA	    DTW	  9
+# ...
+```
+
+#### 3.1.7 Sparkifying: Convert a Pandas Dataframe into a Spark SQL Dataframe
+
+In previous sections, a CSV was directly loaded to Spark andd the resulting Spark SQL Dataframe registered as a temporary view to the catalog of the session.
+
+Now, instead of reading CSV tables from Spark, we upload Pandas dataframes.
+
+```python
+import pandas as pd
+
+airports_df = pd.read_csv('../data/airports.csv')
+planes_df = pd.read_csv('../data/planes.csv')
+
+# Examine the tables in the catalog: only one table - 'flights'
+print(session.catalog.listTables())
+
+# Create spark_temp from airports_df
+airports_sdf = session.createDataFrame(airports_df)
+# Add airports_sdf to the session's catalog
+airports_sdf.createOrReplaceTempView("airports")
+
+# Create spark_temp from planes_df
+planes_sdf = session.createDataFrame(planes_df)
+# Add planes_sdf to the session's catalog
+planes_sdf.createOrReplaceTempView("planes")
+
+# Examine the tables in the catalog again: now 3 tables - 'flights', 'airports', 'planes'
+print(session.catalog.listTables())
+```
+
+### 3.2 Manipulating Data
+
 
 ## 4. Data Wrangling with Spark
 
