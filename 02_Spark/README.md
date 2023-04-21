@@ -40,6 +40,16 @@ Table of contents:
       - [3.1.6 Pandafying: Convert a Spark SQL Dataframe into a Pandas Dataframe](#316-pandafying-convert-a-spark-sql-dataframe-into-a-pandas-dataframe)
       - [3.1.7 Sparkifying: Convert a Pandas Dataframe into a Spark SQL Dataframe](#317-sparkifying-convert-a-pandas-dataframe-into-a-spark-sql-dataframe)
     - [3.2 Manipulating Data](#32-manipulating-data)
+      - [Setup: Create Session + Upload Data](#setup-create-session--upload-data)
+      - [3.2.1 Creating, Renaming, and Casting Columns](#321-creating-renaming-and-casting-columns)
+      - [3.2.2 SQL in a Nutshell](#322-sql-in-a-nutshell)
+      - [3.2.3 Filtering Data: WHERE - filter()](#323-filtering-data-where---filter)
+      - [3.2.4 Selecting Columns: SELECT - select(), selectExpr(), alias()](#324-selecting-columns-select---select-selectexpr-alias)
+      - [3.2.5 Grouping and Aggregating: GROUP BY, MIN, MAX, COUNT, SUM, AVG, AGG](#325-grouping-and-aggregating-group-by-min-max-count-sum-avg-agg)
+        - [Aggregation Functions](#aggregation-functions)
+      - [3.2..6 Joining: JOIN - join()](#326-joining-join---join)
+    - [3.3 Introduction to Machine Learning Pipelines](#33-introduction-to-machine-learning-pipelines)
+    - [3.4 Model Tuning and Selection](#34-model-tuning-and-selection)
   - [4. Data Wrangling with Spark](#4-data-wrangling-with-spark)
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
@@ -539,6 +549,378 @@ print(session.catalog.listTables())
 ```
 
 ### 3.2 Manipulating Data
+
+This chapter deals with methods for Spark SQL dataframe manipulation. Many of these methods have an equivalent SQL operator. check my [SQL guide](https://github.com/mxagar/sql_guide) if you need a refresher.
+
+The notebook: [`02_Manipulating_Data.ipynb`](./lab/02_Intro_PySpark/02_Manipulating_Data.ipynb).
+
+#### Setup: Create Session + Upload Data
+
+```python
+import findspark
+findspark.init()
+
+# Import SparkSession from pyspark.sql
+from pyspark.sql import SparkSession
+
+# Create or get a (new) SparkSession: session
+session = SparkSession.builder.getOrCreate()
+
+# Print session: our SparkSession
+print(session)
+
+# Load and register flights dataframe
+flights = session.read.csv("../data/flights_small.csv", header=True, inferSchema=True)
+flights.createOrReplaceTempView("flights")
+
+# Load and register airports dataframe
+airports = session.read.csv("../data/airports.csv", header=True, inferSchema=True)
+airports.createOrReplaceTempView("airports")
+
+# Load and register planes dataframe
+planes = session.read.csv("../data/planes.csv", header=True, inferSchema=True)
+planes.createOrReplaceTempView("planes")
+
+print(session.catalog.listTables()) # airports, flights, planes
+```
+
+#### 3.2.1 Creating, Renaming, and Casting Columns
+
+Once we get the Spark SQL dataframe, we can add a new column to it with
+
+```python
+df = df.withColumn("newCol", df.oldCol + 1)
+```
+
+However, Spark SQL dataframes are inmutable, i.e., we are creating a new dataframe. Notes:
+
+- `df.colName` is a `Column` object, which comes up often. We can also convert a column name string into a `Column` with `pyspark.sql.functions.col`.
+- `withColumn()` returns the **entire table/dataframe** with a new column. If we want to change a column content, we need to write `"oldCol"` instead of `"newCol"` in the first argument. We can use it to rename columns, too. The second argment **must** be a `Column` object, created as `df.colName` or `col("colName")`.
+
+It might happen that we need to cast the type of a column; to check the types we use `printSchema()` and to cast 
+
+```python
+from pyspark.sql.functions import col
+
+# Print schema with types
+df.printSchema()
+
+# Cast from string to double: new table is created
+df = df.withColumn("air_time", col("air_time").cast("double"))
+
+# Rename column "air_time" -> "flight_duration"
+# BUT, the old column is still there;
+# we can drop it using .select(), as shown below
+df = df.withColumn("flight_duration", flights.air_time)
+
+# Another way to rename column names:
+# this function allows to use two column name strings
+# AND replaces the previous column
+df = df.withColumnRenamed("flight_duration", "air_time")
+```
+
+Notebook examples:
+
+```python
+from pyspark.sql.functions import col
+
+# Create/get the DataFrame flights
+flights = session.table("flights")
+
+# Show the head
+flights.show(5)
+
+# Add a new column: duration_hrs
+# General syntax: df = df.withColumn("newCol", df.oldCol + 1)
+# A new dataframe is returned! That's because dataframes and their columns are inmutable
+# To modify a colum: df = df.withColumn("col", df.col + 1)
+# BUT: in reality, we create a new dataframe with the modified column
+flights = flights.withColumn("duration_hrs", flights.air_time/60)
+
+# Convert air_time and dep_delay (strings) to double to use math operations on them
+flights = flights.withColumn("air_time", col("air_time").cast("double"))
+flights = flights.withColumn("dep_delay", col("dep_delay").cast("double"))
+
+# Rename column and keep old
+flights = flights.withColumn("flight_duration", flights.air_time)
+
+# Another way to rename column names
+# This option replaces the old column
+# flights = flights.withColumnRenamed("flight_duration", "air_time")
+
+flights.printSchema()
+```
+
+#### 3.2.2 SQL in a Nutshell
+
+Many Spark SQL Dataframe methods have an equivalent SQL operation.
+
+Most common SQL operators: `SELECT`, `FROM`, `WHERE`, `AS`, `GROUP BY`, `COUNT()`, `AVG()`, etc.
+
+```sql
+-- Get all the contents from the table my_table: we get a table
+SELECT * FROM my_table;
+
+-- Get specified columns and compute a new column value: we get a table
+SELECT origin, dest, air_time / 60 FROM flights;
+
+-- Filter according to value in column: we get a table
+SELECT * FROM students
+WHERE grade = 'A';
+
+-- Get the table which contains the destination and tail number of flights that last +10h
+SELECT dest, tail_num FROM flights WHERE air_time > 600;
+
+-- Group by: group by category values and apply an aggregation function for each group
+-- In this case: number of flights for each unique origin
+SELECT COUNT(*) FROM flights
+GROUP BY origin;
+
+-- Group by all unique combinations of origin and dest columns
+SELECT origin, dest, COUNT(*) FROM flights
+GROUP BY origin, dest;
+
+-- Group by unique origin-carrier combinations and for each
+-- compute average air time in hrs
+SELECT AVG(air_time) / 60 FROM flights
+GROUP BY origin, carrier;
+
+-- Flight duration in hrs, new column name
+SELECT air_time / 60 AS duration_hrs
+FROM flights
+```
+
+Also, recall we can combine tables in SQL using the `JOIN` operator:
+
+```sql
+-- INNER JOIN: note it is symmetrical, we can interchange TableA and B
+SELECT * FROM TableA
+INNER JOIN TableB
+ON TableA.col_match = TableB.col_match;
+
+-- FULL OUTER JOIN
+SELECT * FROM TableA
+FULL OUTER JOIN TableB
+ON TableA.col_match = Table_B.col_match
+
+-- LEFT OUTER JOIN
+-- Left table: TableA; Right table: TableB
+SELECT * FROM TableA
+LEFT OUTER JOIN TableB
+ON TableA.col_match = Table_B.col_match
+
+-- RIGHT OUTER JOIN
+-- Left table: TableA; Right table: TableB
+SELECT * FROM TableA
+RIGHT OUTER JOIN TableB
+ON TableA.col_match = Table_B.col_match
+```
+
+#### 3.2.3 Filtering Data: WHERE - filter()
+
+The `filter()` function is equivalent to `WHERE`. We can pass either a string we would write after `WHERE` or we can use the typical Python syntax:
+
+```sql
+SELECT * FROM flights WHERE air_time > 120
+```
+
+```python
+flights.filter("air_time > 120").show()
+flights.filter(flights.air_time > 120).show()
+```
+
+Notebook example:
+
+```python
+# Filter flights by passing a string
+long_flights1 = flights.filter("distance > 1000")
+
+# Filter flights by passing a column of boolean values
+long_flights2 = flights.filter(flights.distance > 1000)
+
+# Print the data to check they're equal
+long_flights1.show(2)
+long_flights2.show(2)
+```
+
+#### 3.2.4 Selecting Columns: SELECT - select(), selectExpr(), alias()
+
+The `select()` method is equivalent to the `SELECT` SQL operator: it can take several comma-separated column names or `Column` objects (`df.col`) and returns a table with them. In contrast, the `withColumn()` method returns the entire table. Therefore, if we want to drop unnecessary columns, we can use `select()`.
+
+If we want to perform a more sophisticated selection, as in SQL, we can use `selectExpr()` and pass comma-separated SQL strings; if we want to change the name of the selected/transformed column, we can use `alias()`, equivalent to `AS` in SQL.
+
+Notebook examples:
+
+```python
+# Select the first set of columns
+selected1 = flights.select("tailnum", "origin", "dest")
+
+# Select the second set of columns
+temp = flights.select(flights.origin, flights.dest, flights.carrier)
+
+# Define first filter
+filterA = flights.origin == "SEA"
+
+# Define second filter
+filterB = flights.dest == "PDX"
+
+# Filter the data, first by filterA then by filterB
+selected2 = temp.filter(filterA).filter(filterB)
+
+# Define avg_speed
+# We define a new column object
+avg_speed = (flights.distance/(flights.air_time/60)).alias("avg_speed")
+
+# Select the correct columns
+# We can pass comma separated strings or column objects to select();
+# each column is a comma-separated element.
+speed1 = flights.select("origin", "dest", "tailnum", avg_speed)
+
+# Create the same table using a SQL expression
+# We can pass comma separated SQL strings to selectExpr(); each colum operation is
+# a comma-separated element.
+speed2 = flights.selectExpr("origin", "dest", "tailnum", "distance/(air_time/60) as avg_speed")
+```
+
+#### 3.2.5 Grouping and Aggregating: GROUP BY, MIN, MAX, COUNT, SUM, AVG, AGG
+
+Similarly as it is done in SQL, we can create a `pyspark.sql.GroupedData` object with `groupBy()` and then apply aggregation functions like `min()`, `max()`, `count()`, `sum()`, `avg()`, `agg()`, etc. Note that we can use `groupBy()` in two ways:
+
+- If we pass one or more column names to `groupBy()`, i.e., `groupBy("col")`, it will group the table in the classes/unique values of the passed column(s); then, we apply an aggregation function on those groups. This is equivalent to SQL.
+- If we don't pass a column name to `groupBy()`, each row is a group. This seems not to be useful, but it is in practice, because thanks to it we can apply aggregation functions on the rows that would not be possible otherwise; e.g., `df.min("col")` is not possible, but we need to do `df.groupBy().min("col")`.
+
+Notebook examples:
+
+```python
+# Group all flights by destination and for them
+# pick the minimum distance
+flights.groupBy("dest").min("distance").show(5)
+
+# Find the shortest flight from PDX in terms of distance
+# Note that in this case we don't pass a column to groupBy, but 
+# concatenate an aggregation function with the column, which applies to all rows
+flights.filter(flights.origin == "PDX").groupBy().min("distance").show()
+
+# Find the longest flight from SEA in terms of air time
+# Note that in this case we don't pass a column to groupBy, but 
+# concatenate an aggregation function with the column, which applies to all rows
+flights.filter(flights.origin == "SEA").groupBy().max("air_time").show()
+
+# Average duration of Delta flights
+# Note that in this case we don't pass a column to groupBy, but 
+# concatenate an aggregation function with the column, which applies to all rows
+flights.filter(flights.carrier == "DL").filter(flights.origin == "SEA").groupBy().avg("air_time").show()
+
+# Total hours in the air
+# Note that in this case we don't pass a column to groupBy, but 
+# concatenate an aggregation function with the column, which applies to all rows
+flights.withColumn("duration_hrs", flights.air_time/60).groupBy().sum("duration_hrs").show()
+
+# Group by tailnum
+by_plane = flights.groupBy("tailnum")
+
+# Number of flights each plane made
+by_plane.count().show(5)
+
+# Group by origin
+by_origin = flights.groupBy("origin")
+
+# Average duration of flights from PDX and SEA
+by_origin.avg("air_time").show()
+```
+
+##### Aggregation Functions
+
+The module `pyspark.sql.functions` contains many aggregation functions which we can use with the generic `agg()` method which is applied after any `groupBy()`:
+
+- `abs()`: Computes the absolute value of a column.
+- `avg()`: Computes the average of a column.
+- `stddev()`: Computes the standard deviation of a column.
+- `col()`: Returns a column based on the given column name.
+- `concat()`: Concatenates multiple columns together.
+- `count()`: Counts the number of non-null values in a column.
+- `date_format()`: Formats a date or timestamp column based on a specified format string.
+- `dayofmonth()`: Extracts the day of the month from a date or timestamp column.
+- `explode()`: Transforms an array column into multiple rows.
+- `first()`: Returns the first value of a column in a group.
+- `lit()`: Creates a column with a literal value.
+- `max()`: Computes the maximum value of a column.
+- `min()`: Computes the minimum value of a column.
+- `month()`: Extracts the month from a date or timestamp column.
+- `round()`: Rounds a column to a specified number of decimal places.
+- `split()`: Splits a string column based on a delimiter.
+- `sum()`: Computes the sum of a column.
+- `to_date()`: Converts a string column to a date column.
+- `to_timestamp()`: Converts a string column to a timestamp column.
+- `udf()`: Defines a user-defined function that can be used in PySpark.
+
+... and many more.
+
+Notebook examples:
+
+```python
+# Import pyspark.sql.functions as F
+import pyspark.sql.functions as F
+
+# Group by month and dest
+by_month_dest = flights.groupBy("month", "dest")
+
+# Average departure delay by month and destination
+by_month_dest.avg("dep_delay").show(5)
+
+# Standard deviation of departure delay
+by_month_dest.agg(F.stddev("dep_delay")).show(5)
+```
+
+#### 3.2..6 Joining: JOIN - join()
+
+Joining Spark SQL dataframes is very similar to joining in SQL: we combine tables given the index values on key columns.
+
+```python
+dj_joined = df_left.join(other=df_right,
+                         on="key_col",
+                         how="left_outer")
+
+# Possible values for how: 
+#    "inner" (default), "outer", "left_outer", "right_outer", "leftsemi", and "cross"
+# Other arguments for join():
+# - suffixes: tuple of strings to append to the column names that overlap between the two DataFrames.
+#    By default: "_x" and "_y"
+# - broadcast: boolean value indicating whether to broadcast the smaller DataFrame to all nodes in the cluster
+#    to speed up the join operation. By default: False
+
+```
+
+Notebook examples:
+
+```python
+# Examine the data
+print(airports.show(5))
+
+# Rename the faa column to be dest
+airports = airports.withColumnRenamed("faa", "dest")
+
+# Examine the data
+print(airports.show(5))
+
+# Join the DataFrames
+flights_with_airports = flights.join(airports,
+                                     on="dest",
+                                     how="left_outer")
+
+# Examine the new DataFrame
+print(flights_with_airports.show(5))
+```
+
+### 3.3 Introduction to Machine Learning Pipelines
+
+
+
+The notebook: [`03_Machine_Learning.ipynb`](./lab/02_Intro_PySpark/03_Machine_Learning.ipynb).
+
+
+### 3.4 Model Tuning and Selection
+
 
 
 ## 4. Data Wrangling with Spark
