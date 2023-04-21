@@ -49,7 +49,24 @@ Table of contents:
         - [Aggregation Functions](#aggregation-functions)
       - [3.2..6 Joining: JOIN - join()](#326-joining-join---join)
     - [3.3 Introduction to Machine Learning Pipelines](#33-introduction-to-machine-learning-pipelines)
-    - [3.4 Model Tuning and Selection](#34-model-tuning-and-selection)
+      - [Setup: Create Session + Upload Data](#setup-create-session--upload-data-1)
+      - [3.3.1 Introduction to Machine Learning in Spark](#331-introduction-to-machine-learning-in-spark)
+      - [3.3.2 Data Processing Pipeline](#332-data-processing-pipeline)
+        - [Join](#join)
+        - [Cast Types](#cast-types)
+        - [New Features/Columns](#new-featurescolumns)
+        - [Remove Missing Values](#remove-missing-values)
+        - [Encode Categoricals](#encode-categoricals)
+        - [Assemble a Vector and Create a Pipeline](#assemble-a-vector-and-create-a-pipeline)
+        - [Fit and Transform the Pipeline](#fit-and-transform-the-pipeline)
+        - [Train/Test Split](#traintest-split)
+      - [3.3.3 Model Tuning and Selection](#333-model-tuning-and-selection)
+        - [Instantiate Logistic Regression Model](#instantiate-logistic-regression-model)
+        - [Instantiate Evaluation Metric](#instantiate-evaluation-metric)
+        - [Instantiate Parameter Grid](#instantiate-parameter-grid)
+        - [Cross Validation Objec](#cross-validation-objec)
+        - [Fit the Model with Grid Search](#fit-the-model-with-grid-search)
+        - [Evaluate the Model](#evaluate-the-model)
   - [4. Data Wrangling with Spark](#4-data-wrangling-with-spark)
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
@@ -607,9 +624,10 @@ df.printSchema()
 
 # Cast from string to double: new table is created
 df = df.withColumn("air_time", col("air_time").cast("double"))
+df = df.withColumn("air_time", df.arr_delay.cast("double"))
 
 # Rename column "air_time" -> "flight_duration"
-# BUT, the old column is still there;
+# BUT, the old column is still there if it has another name;
 # we can drop it using .select(), as shown below
 df = df.withColumn("flight_duration", flights.air_time)
 
@@ -914,14 +932,250 @@ print(flights_with_airports.show(5))
 
 ### 3.3 Introduction to Machine Learning Pipelines
 
-
+In this section, basic data processing is perform in form of a pipeline and a logistic regression model is trained with grid search.
 
 The notebook: [`03_Machine_Learning.ipynb`](./lab/02_Intro_PySpark/03_Machine_Learning.ipynb).
 
+#### Setup: Create Session + Upload Data
 
-### 3.4 Model Tuning and Selection
+```python
+import findspark
+findspark.init()
+
+# Import SparkSession from pyspark.sql
+from pyspark.sql import SparkSession
+
+# Create or get a (new) SparkSession: session
+session = SparkSession.builder.getOrCreate()
+
+# Print session: our SparkSession
+print(session)
+
+# Load and register flights dataframe
+flights = session.read.csv("../data/flights_small.csv", header=True, inferSchema=True)
+flights.createOrReplaceTempView("flights")
+
+# Load and register airports dataframe
+airports = session.read.csv("../data/airports.csv", header=True, inferSchema=True)
+airports.createOrReplaceTempView("airports")
+
+# Load and register planes dataframe
+planes = session.read.csv("../data/planes.csv", header=True, inferSchema=True)
+planes.createOrReplaceTempView("planes")
+
+print(session.catalog.listTables()) # airports, flights, planes
+```
+
+#### 3.3.1 Introduction to Machine Learning in Spark
+
+We have two types of classes defined in the module `pyspark.ml`:
+
+- `Transformer` classes: they take a Spark SQL Dataframe and `.transform()` it to yield a new Spark SQL Dataframe.
+- `Estimator` classes: they take a Spark SQL Dataframe and `.fit()` a model to it to deliver back an object, which can be a trained `Transformer` ready to `transform()` the data. For instance, a model is an `Estimator` which returns a `Transformer`; then, scoring a model consists in calling `transform()` on the returned `Transformer` using the desired dataset.
+
+#### 3.3.2 Data Processing Pipeline
+
+In this section, basic and typical data processing steps are carried out on the loaded datasets. In spark, feature engineering is done with Pipelines. Shown steps:
+
+- Join tables.
+- Cast types: numeric values are required for modeling.
+- New Features/Columns
+- Remove Missing Values
+- Encode Categoricals
+- Assemble a Vector and Create a Pipeline
+- Fit and Transform the Pipeline
+- Train/Test Split
+
+##### Join
+
+```python
+# Rename year column
+planes = planes.withColumnRenamed("year", "plane_year")
+
+# Join the DataFrames
+model_data = flights.join(planes, on="tailnum", how="leftouter")
+```
+
+##### Cast Types
+
+```python
+model_data.printSchema()
+
+# Cast the columns to integers
+model_data = model_data.withColumn("arr_delay", model_data.arr_delay.cast("integer"))
+model_data = model_data.withColumn("air_time", model_data.air_time.cast("integer"))
+model_data = model_data.withColumn("month", model_data.month.cast("integer"))
+model_data = model_data.withColumn("plane_year", model_data.plane_year.cast("integer"))
+```
+
+##### New Features/Columns
+
+```python
+# Create the column plane_age
+model_data = model_data.withColumn("plane_age", model_data.year - model_data.plane_year)
+
+# Create is_late
+model_data = model_data.withColumn("is_late", model_data.arr_delay > 0)
+
+# Convert to an integer: booleans need to be converted to integers, too
+model_data = model_data.withColumn("label", model_data.is_late.cast("integer"))
+```
+
+##### Remove Missing Values
+
+```python
+# Remove missing values
+model_data = model_data.filter("""arr_delay is not NULL 
+                                  and dep_delay is not NULL
+                                  and air_time is not NULL
+                                  and plane_year is not NULL""")
+```
+
+##### Encode Categoricals
+
+We need to instantiate `StringIndexer` to map all unique categorical levels to numbers and a `OneHotEncoder` to create dummy variables from the numbers. All these objects need to be insstantiated and arranged in a vector which is then `fit()` on the dataframe. After that, we can `transform()` the data.
+
+```python
+from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
+from pyspark.ml import Pipeline
+
+# Create a StringIndexer: Estimator that needs to be fit() and returns a Transformer
+carr_indexer = StringIndexer(inputCol="carrier",
+                             outputCol="carrier_index")
+
+# Create a OneHotEncoder: Estimator that needs to be fit() and returns a Transformer
+carr_encoder = OneHotEncoder(inputCol="carrier_index",
+                             outputCol="carrier_fact")
+
+# Create a StringIndexer: Estimator that needs to be fit() and returns a Transformer
+dest_indexer = StringIndexer(inputCol="dest",
+                             outputCol="dest_index")
+
+# Create a OneHotEncoder: Estimator that needs to be fit() and returns a Transformer
+dest_encoder = OneHotEncoder(inputCol="dest_index",
+                             outputCol="dest_fact")
+```
+
+##### Assemble a Vector and Create a Pipeline
+
+```python
+# Make a VectorAssembler: Transformer
+vec_assembler = VectorAssembler(inputCols=["month",
+                                           "air_time",
+                                           "carrier_fact",
+                                           "dest_fact",
+                                           "plane_age"],
+                                outputCol="features")
+
+# Make the pipeline: we append in series all the Estimator/Transformer objects
+# and the VectorAssembler
+flights_pipe = Pipeline(stages=[dest_indexer,
+                                dest_encoder,
+                                carr_indexer,
+                                carr_encoder,
+                                vec_assembler])
+```
+
+##### Fit and Transform the Pipeline
+
+```python
+# Fit and transform the data:
+# - first, the Estimators are fit, which generate trained Transformers
+# - then, the dataset is passed through the trained Transformers
+piped_data = flights_pipe.fit(model_data).transform(model_data)
+
+piped_data.printSchema()
+```
+
+##### Train/Test Split
+
+```python
+# Split the data into training and test sets
+# train 60%, test 40%
+# Always split after the complete dataset has been processed!
+training, test = piped_data.randomSplit([.6, .4])
+```
 
 
+#### 3.3.3 Model Tuning and Selection
+
+In this section, a logistic regression model is tuned and trained.
+
+##### Instantiate Logistic Regression Model
+
+```python
+# Import LogisticRegression: Estimator
+from pyspark.ml.classification import LogisticRegression
+
+# Create a LogisticRegression Estimator
+lr = LogisticRegression()
+```
+
+##### Instantiate Evaluation Metric
+
+```python
+# Import the evaluation submodule
+import pyspark.ml.evaluation as evals
+
+# Create a BinaryClassificationEvaluator
+evaluator = evals.BinaryClassificationEvaluator(metricName="areaUnderROC")
+```
+
+##### Instantiate Parameter Grid
+
+```python
+# Import the tuning submodule
+import numpy as np
+import pyspark.ml.tuning as tune
+
+# Create the parameter grid
+grid = tune.ParamGridBuilder()
+
+# Add the hyperparameters to be tried in the grid
+grid = grid.addGrid(lr.regParam, np.arange(0, .1, .01))
+grid = grid.addGrid(lr.elasticNetParam, [0, 1])
+
+# Build the grid
+grid = grid.build()
+```
+
+##### Cross Validation Objec
+
+```python
+# Create the CrossValidator
+cv = tune.CrossValidator(estimator=lr,
+                         estimatorParamMaps=grid,
+                         evaluator=evaluator)
+```
+
+##### Fit the Model with Grid Search
+
+```python
+# Fit cross validation models
+models = cv.fit(training)
+
+# Extract the best model
+best_lr = models.bestModel
+
+# We can also train the model
+# without cross validation and grid search
+not_best_lr = lr.fit(training)
+
+# Print best_lr
+print(best_lr)
+```
+
+##### Evaluate the Model
+
+```python
+# Use the model to predict the test set
+# Note that the model does not have a predict() function
+# but it transforms() the data into predictions!
+test_results = best_lr.transform(test)
+
+# Evaluate the predictions
+print(evaluator.evaluate(test_results)) # 0.6962630071607577
+```
 
 ## 4. Data Wrangling with Spark
 
