@@ -68,6 +68,7 @@ Table of contents:
         - [Fit the Model with Grid Search](#fit-the-model-with-grid-search)
         - [Evaluate the Model](#evaluate-the-model)
   - [4. Data Wrangling with Spark](#4-data-wrangling-with-spark)
+    - [4.1 Data Wrangling](#41-data-wrangling)
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
@@ -1178,6 +1179,23 @@ print(evaluator.evaluate(test_results)) # 0.6962630071607577
 ```
 
 ## 4. Data Wrangling with Spark
+
+This section introduces the following topics:
+
+- A
+- B
+
+The notebooks with the exercises are located in [`lab/03_Data_Wrangling`](./lab/03_Data_Wrangling/).
+
+The data is not uploaded to the repository, but it can be downloaded from the Udacity Spark course link. I have a local non-committed file [`lab/data/mini_sparkify_event_data.json`](./lab/data/mini_sparkify_event_data.json).
+
+Lecture videos:
+
+- [Data Wrangling](https://www.youtube.com/watch?v=pDOlgj0FBdU)
+- ...
+
+### 4.1 Data Wrangling
+
 
 
 ## 5. Setting up Spark Clusters with AWS
