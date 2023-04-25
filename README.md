@@ -12,7 +12,9 @@ The repository is structured in folders/modules, which contain a Markdown file w
 - [`00_Intro_Big_Data`](./00_Intro_Big_Data): general introduction material, without code.
 - [`01_Intro_Hadoop`](./01_Intro_Hadoop): introduction material on Hadoop; small code examples are shown, but not implemented.
 - **[`02_Spark`](./02_Spark): full Spark course with exercises.**
+<!--
 - [`03_More_Spark`](./03_More_Spark): additional topics.
+-->
 
 To use this guide, open the desired topic folder and read the main Markdown in there; if you're new to the topic, follow a sequential order. To run the exercises and examples, you'll need to set up an environment either locally or remotely; all instructions for that should be provided in each folder/module.
 
