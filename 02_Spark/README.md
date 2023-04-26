@@ -68,7 +68,7 @@ Table of contents:
         - [Fit the Model with Grid Search](#fit-the-model-with-grid-search)
         - [Evaluate the Model](#evaluate-the-model)
   - [4. Data Wrangling with Spark](#4-data-wrangling-with-spark)
-    - [4.1 Data Wrangling](#41-data-wrangling)
+    - [4.1 Functional Programming](#41-functional-programming)
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
@@ -1191,12 +1191,43 @@ The data is not uploaded to the repository, but it can be downloaded from the Ud
 
 Lecture videos:
 
+- [Lesson Overview](https://www.youtube.com/watch?v=XWT2nkoy474)
+- [Functional Programming](https://www.youtube.com/watch?v=ZTbFxpcvmSk)
+- [Why Functional Programming](https://www.youtube.com/watch?v=jSwfZ8wks_E)
+- [Procedural Code](https://www.youtube.com/watch?v=CJtXhcG3MLc)
+- [Pure Functions](https://www.youtube.com/watch?v=AHIGpJaAL1U)
+- [The Spark DAGs](https://www.youtube.com/watch?v=lrgHpuIJxfM)
+- [Maps And Lambda Functions](https://www.youtube.com/watch?v=cOWpvYouMA8)
+- ...
 - [Data Wrangling](https://www.youtube.com/watch?v=pDOlgj0FBdU)
 - ...
 
-### 4.1 Data Wrangling
+### 4.1 Functional Programming
 
+General purpose programming languages are **procedural**: they use for-loops and the like to process data. However, Spark is written in [**Scala**](https://en.wikipedia.org/wiki/Scala_(programming_language)), which is both OOP and **functional**; when using the Python API PySpark, we need to employ the **functional methods** if we want to be fast. Under the hood, the Python code uses [py4j](https://www.py4j.org/) to make calls to the Java Virtual Machine (JVM) where the Scala library is running.
 
+Functional programming uses methods like `map()`, `apply()`, `filter()`, etc. In those, we pass a function to the method, which is the applied to the entire dataset, without the need to using for-loops.
+
+This **functional programming** style is very well suited for distributed systems and it is related to how MapReduce and Hadoop work:
+
+![Functional Programming](./pics/functional_programming.jpg)
+
+![Functional vs. Procedural Programming](./pics/functional_vs_procedural_programming.jpg)
+
+#### Pure Functions and Direct Acyclic Graphs (DAGs)
+
+So that a function passed to a method such as `map()`, `apply()` or `filter()` works properly:
+
+- it should have no side effects on variables outside its scope,
+- they should not alter the data which is being processed.
+
+These functions are called **pure functions**.
+
+In Spark, every node makes a copy of the data being processed, so the data is *immutable*. Additionally, the pure functions we apply are usually very simple; we chain them one after the other to define a more complex processing. So a function seems to be composed of multiple subfunctions. All sub-functions need to be pure.
+
+The data is not copied for each of the sub-functions; instead, we perform **lazy evaluation**: all sub-functions are chained in **Direct Acyclic Graphs (DAGs)** and they are not run on the data until it is really necessary. The combinations of sub-functions or chained steps before touching any data are called **stages**.
+
+This is similar to baking bread: we collect all necessary stuff (ingredients, tools, etc.) and prepare them properly before even starting to make the dough.
 
 ## 5. Setting up Spark Clusters with AWS
 
