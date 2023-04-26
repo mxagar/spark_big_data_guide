@@ -1208,6 +1208,7 @@ Lecture videos:
 - [Distributed Data Stores](https://www.youtube.com/watch?v=DYAErjfPONE)
 - [SparkSession](https://www.youtube.com/watch?v=ZMSzkDG1BSQ)
 - [Load Save Dataframe](https://www.youtube.com/watch?v=Mqs8e_TmHjM)
+- [Imperative Vs. Declarative Programming](https://www.youtube.com/watch?v=gGIZvUu4H9U)
 - ...
 - [Data Wrangling](https://www.youtube.com/watch?v=pDOlgj0FBdU)
 - ...
@@ -1359,7 +1360,7 @@ In the following instantiation snippets for both entry points:
 ### -- SparkContext
 from pyspark import SparkContext, SparkConf
 
-configure = SparkConf().setAppName("my-app-name").setMaster("desired-ip") # "local" i local mode
+configure = SparkConf().setAppName("my-app-name").setMaster("desired-ip") # "local" if local mode
 
 sc = SparkContext(conf=configure)
 
@@ -1372,13 +1373,81 @@ spark = SparkSession \
   .appName("my-app-name") \
   .config("config_option", "config_value") \
   .getOrCreate()
+
+# Get information of the SparkContext
+spark.sparkContext.getConf().getAll()
+
+# SparkSession info
+# Note that we get a link to the UI!
+spark
 ```
 
 #### Example Notebook: Read and Write Data into Spark Dataframes
 
 Notebook: [`3_data_inputs_and_outputs.ipynb`](./lab/03_Data_Wrangling/3_data_inputs_and_outputs.ipynb).
 
+```python
+# Find Spark
+import findspark
+findspark.init()
 
+import pyspark
+from pyspark import SparkConf
+from pyspark.sql import SparkSession
+
+spark = SparkSession \
+    .builder \
+    .appName("Our first Python Spark SQL example") \
+    .getOrCreate()
+
+# Get information of the SparkContext
+spark.sparkContext.getConf().getAll()
+
+# SparkSession info
+# Note that we get a link to the UI!
+spark
+
+# In this case, we're runnig Spark locally and use a local dataset
+# but we could also use a URL: "hdfs://ec2-path/my_file.json"
+path = "../data/sparkify_log_small.json"
+user_log = spark.read.json(path)
+
+# Get dataset Schema
+user_log.printSchema()
+
+# Get column names and types
+user_log.describe()
+
+# Equivalent to head()
+user_log.show(n=1)
+
+# Equivalent to head()
+user_log.take(5)
+
+# To save a dataset, we can use .write.save() and choose the desired format
+# Many available formats: Parquet, Avro, ORC, JSON, CSV,...
+# Note that the resulting output is a folder!
+# Inside that folder:
+# - the resulting CSV is partitioned into several CSVs,
+#   because they are created in parallel/distributedly
+# - we have also CRC files of the CSVs: Cyclic Redundancy Check,
+#   i.e., checksums of the files to allow for data consistency checks
+out_path = "../data/sparkify_log_small.csv"
+user_log.write.save(out_path, format="csv", header=True)
+
+# We can read/load the generated CSV
+# Even though the path is a folder, all files are correctly loaded
+user_log_2 = spark.read.csv(out_path, header=True)
+
+# Same schema and content as before
+user_log_2.printSchema()
+
+# userID column
+user_log_2.select("userID").show()
+
+# Equivalent to head()
+user_log_2.take(1)
+```
 
 ### 4.3 Data Wrangling
 
