@@ -260,6 +260,8 @@ Additionally, we have:
 - The Spark context talks to the **cluster manager**, which is outside from the **master node**. That manager can be, for instance Yarn and it takes care of the resource distribution.
 - The **cluster manager** handles the **worker nodes**, which are independent from the manager and are usually distributed. It requests containers with certain capacities within them depending on the workload.
 
+The `SparkContext` is the main entry point or interaction object in Spark. However, since version 2.0, the `SparkSession` was introduced, which is a higher level API that serves also as an entry point. More on that in the section [SparkContext and SparkSession](#sparkcontext-and-sparksession).
+
 In the cluster-mode, we can have several cluster managers:
 
 - Stand-alone, i.e., Spark itself.
@@ -402,6 +404,8 @@ sc.stop()
 ```
 
 #### 3.1.2 Creating a Spark Session
+
+The `SparkContext` is the main entry point or interaction object in Spark. However, since version 2.0, the `SparkSession` was introduced, which is a higher level API that serves also as an entry point.
 
 Creating multiple `SparkSession`s and `SparkContext`s can cause issues, use the `SparkSession.builder.getOrCreate()` method instead, which returns an existing `SparkSession` if there's already one in the environment, or creates a new one if necessary. Usually, in a notebook, we run first
 
@@ -1182,8 +1186,10 @@ print(evaluator.evaluate(test_results)) # 0.6962630071607577
 
 This section introduces the following topics:
 
-- A
-- B
+- Functional programming
+- SparkContext and SparkSession
+- Reading and writing dataframes into/from Spark
+- ...
 
 The notebooks with the exercises are located in [`lab/03_Data_Wrangling`](./lab/03_Data_Wrangling/).
 
@@ -1198,6 +1204,10 @@ Lecture videos:
 - [Pure Functions](https://www.youtube.com/watch?v=AHIGpJaAL1U)
 - [The Spark DAGs](https://www.youtube.com/watch?v=lrgHpuIJxfM)
 - [Maps And Lambda Functions](https://www.youtube.com/watch?v=cOWpvYouMA8)
+- [Data Formats](https://www.youtube.com/watch?v=y-EE91w7Kf0)
+- [Distributed Data Stores](https://www.youtube.com/watch?v=DYAErjfPONE)
+- [SparkSession](https://www.youtube.com/watch?v=ZMSzkDG1BSQ)
+- [Load Save Dataframe](https://www.youtube.com/watch?v=Mqs8e_TmHjM)
 - ...
 - [Data Wrangling](https://www.youtube.com/watch?v=pDOlgj0FBdU)
 - ...
@@ -1228,6 +1238,153 @@ In Spark, every node makes a copy of the data being processed, so the data is *i
 The data is not copied for each of the sub-functions; instead, we perform **lazy evaluation**: all sub-functions are chained in **Direct Acyclic Graphs (DAGs)** and they are not run on the data until it is really necessary. The combinations of sub-functions or chained steps before touching any data are called **stages**.
 
 This is similar to baking bread: we collect all necessary stuff (ingredients, tools, etc.) and prepare them properly before even starting to make the dough.
+
+#### Example Notebook: Functional Programming
+
+Notebook: [`1_procedural_vs_functional_in_python.ipynb`](./lab/03_Data_Wrangling/1_procedural_vs_functional_in_python.ipynb).
+
+```python
+### -- Setup
+
+# Find Spark
+import findspark
+findspark.init()
+
+import pyspark
+
+# We initialize a SparkContext (an alternative to working with Sessions)
+# We use SparkContext to be able to use parallelize() later on
+sc = pyspark.SparkContext(appName="maps_and_lazy_evaluation_example")
+
+### -- Procedural Code
+
+# Dataset: list of song names
+log_of_songs = [
+        "Despacito",
+        "Nice for what",
+        "No tears left to cry",
+        "Despacito",
+        "Havana",
+        "In my feelings",
+        "Nice for what",
+        "Despacito",
+        "All the stars"
+]
+
+# We want to define a function which counts the number
+# of times a song appears in the list.
+# If we use the typical procedural programming,
+# we program a loop that traverses the entire list
+# and counts the 
+play_count = 0
+def count_plays(song_title, play_count):
+    for song in log_of_songs:
+        if song == song_title:
+            play_count = play_count + 1
+    return play_count
+
+count_plays("Despacito", play_count) # 3
+
+### -- Functional Code with PySpark
+
+# Parallelize the log_of_songs to use with Spark
+# sc.parallelize() takes a list and creates an
+# RDD = Resilient Distributed Dataset, i.e., 
+# a dataset distirbuted across the Spark nodes.
+# This RDD is represented by distributed_song_log
+distributed_song_log = sc.parallelize(log_of_songs)
+
+convert_song_to_lowercase("Havana") # 'havana'
+
+# We map() our function to the RDD
+# BUT it is not executed, due to the lazy evaluation principle.
+# We need to run an action, e.g., collect().
+# With collect() the results from all of the clusters
+# are taken and gathered into a single list on the master node
+distributed_song_log.map(convert_song_to_lowercase)
+
+# With collect() the results from all of the clusters
+# are taken and gathered into a single list on the master node
+distributed_song_log.map(convert_song_to_lowercase).collect()
+# ['despacito',
+#  'nice for what',
+#  'no tears left to cry',
+#  'despacito',
+#  'havana',
+#  'in my feelings',
+#  'nice for what',
+#  'despacito',
+#  'all the stars']
+
+# If we run collect() without map(), we get
+# the original immuted data
+distributed_song_log.collect()
+# ['Despacito',
+#  'Nice for what',
+#  'No tears left to cry',
+#  'Despacito',
+#  'Havana',
+#  'In my feelings',
+#  'Nice for what',
+#  'Despacito',
+#  'All the stars']
+
+# Usually, the map() functions are defined as lambdas
+# or anonymoud functions.
+# Note that we are using the Pythons built-in lower() function
+# inside Spark!
+distributed_song_log.map(lambda song: song.lower()).collect()
+```
+
+### 4.2 Loading Data to Spark: Read and Write
+
+Common data formats:
+
+- CSV
+- JSON
+- HTML
+- XML (generic HTML, with user-defined tags)
+
+Recall that Spark can use HDFS as the file storage system underneath; HDFS splits large files into chunks of 128 MB and stores them distributed in a fault-tolerant way (i.e., with copies). However, we don't need to use HDFS; we can also store the data in AWS S3.
+
+#### SparkContext and SparkSession
+
+`SparkContext` is the main entry point to Spark and is used to connect to a Spark cluster. It is responsible for coordinating the distribution of tasks, managing memory, and scheduling operations. In previous versions of Spark, `SparkContext` was the primary entry point to the Spark APIs. However, since Spark 2.0, `SparkSession` has been introduced as a higher-level API that provides a unified entry point to Spark, SQL, and streaming functionality.
+
+`SparkSession` is a higher-level API that provides a convenient way to work with Spark. It includes `SparkContext` under the hood and provides additional functionality for working with structured data using Spark's SQL, DataFrame, and Dataset APIs. It also provides built-in support for working with Hive, Avro, Parquet, and other file formats.
+
+In the following instantiation snippets for both entry points:
+
+```python
+### -- SparkContext
+from pyspark import SparkContext, SparkConf
+
+configure = SparkConf().setAppName("my-app-name").setMaster("desired-ip") # "local" i local mode
+
+sc = SparkContext(conf=configure)
+
+### -- SparkSession
+from pyspark.sql import SparkSession
+
+# Create or get a (new) SparkSession: spark
+spark = SparkSession \
+  .builder \
+  .appName("my-app-name") \
+  .config("config_option", "config_value") \
+  .getOrCreate()
+```
+
+#### Example Notebook: Read and Write Data into Spark Dataframes
+
+Notebook: [`3_data_inputs_and_outputs.ipynb`](./lab/03_Data_Wrangling/3_data_inputs_and_outputs.ipynb).
+
+
+
+### 4.3 Data Wrangling
+
+
+### 4.4 Spark SQL
+
 
 ## 5. Setting up Spark Clusters with AWS
 
