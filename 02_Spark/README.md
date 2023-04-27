@@ -614,7 +614,7 @@ Once we get the Spark SQL dataframe, we can add a new column to it with
 df = df.withColumn("newCol", df.oldCol + 1)
 ```
 
-However, Spark SQL dataframes are inmutable, i.e., we are creating a new dataframe. Notes:
+However, Spark SQL dataframes are immutable, i.e., we are creating a new dataframe. Notes:
 
 - `df.colName` is a `Column` object, which comes up often. We can also convert a column name string into a `Column` with `pyspark.sql.functions.col`.
 - `withColumn()` returns the **entire table/dataframe** with a new column. If we want to change a column content, we need to write `"oldCol"` instead of `"newCol"` in the first argument. We can use it to rename columns, too. The second argment **must** be a `Column` object, created as `df.colName` or `col("colName")`.
@@ -677,6 +677,11 @@ flights.printSchema()
 #### 3.2.2 SQL in a Nutshell
 
 Many Spark SQL Dataframe methods have an equivalent SQL operation.
+
+Note that SQL is a declarative language:
+
+- Imperative languages (e.g., Python) require defining the specific processing steps to obtain a result.
+- Declarative languages (e.g., SQL) do not care about the processing steps, we simply define the result we'd like and an engine under the hoods takes care of the necessary steps to obtain that result.
 
 Most common SQL operators: `SELECT`, `FROM`, `WHERE`, `AS`, `GROUP BY`, `COUNT()`, `AVG()`, etc.
 
@@ -1144,7 +1149,7 @@ grid = grid.addGrid(lr.elasticNetParam, [0, 1])
 grid = grid.build()
 ```
 
-##### Cross Validation Objec
+##### Cross Validation Object
 
 ```python
 # Create the CrossValidator
@@ -1193,9 +1198,25 @@ This section introduces the following topics:
 
 The notebooks with the exercises are located in [`lab/03_Data_Wrangling`](./lab/03_Data_Wrangling/).
 
-The data is not uploaded to the repository, but it can be downloaded from the Udacity Spark course link. I have a local non-committed file [`lab/data/mini_sparkify_event_data.json`](./lab/data/mini_sparkify_event_data.json).
+The data can be downloaded from the Udacity Spark course link. I use two local small files (to learn and practice the syntax):
 
-Lecture videos:
+- [`lab/data/mini_sparkify_event_data.json`](./lab/data/mini_sparkify_event_data.json) (+100 MB, not uploaded).
+- [`lab/data/sparkify_log_small.json`](./lab/data/sparkify_log_small.json) (4.5 MB, uploaded).
+
+However, theres a larger equivalent file (of several GBs in size) used in later sections.
+
+Note that data analysis and wrangling can be performed in two main forms in PySpark:
+
+- Using the **Python API** (Spark Dataframe). Python is an *imperative* language, i.e., we need to define every step to be carried out to obtain the desired result. In PySpark, we define the steps with **functional programming**, i.e., we don't use for-loops, instead, transformation functions are defined and passed to `map()` or similar application methods.
+- Using **SQL** (Spark Dataframe). SQL is a *declarative* language, i.e., we define the result we want to obtain and an engine under the hood takes care of the necessary steps to create that result.
+
+The inputs from both the Python API and Spark SQL are processed by the **query optimizer Catalyst** and transformed into a **Direct Acyclic Graph (DAG)**. These DAGs represent the processing steps we want to apply on the data. Additionally, the data is internally represented as **Resilient Distributed Datasets (RDD)**. In newer versions, RDDs are abstracted to higher level structures, such as dataframes, however, we sometimes need to interact with them manually. The DAGs are applied on RDDs to obtain the desired results.
+
+![Catalyst](./pics/catalyst.jpg)
+
+![RDDs](./pics/RDDs.jpg)
+
+#### Lecture Videos
 
 - [Lesson Overview](https://www.youtube.com/watch?v=XWT2nkoy474)
 - [Functional Programming](https://www.youtube.com/watch?v=ZTbFxpcvmSk)
@@ -1212,6 +1233,7 @@ Lecture videos:
 - ...
 - [Data Wrangling](https://www.youtube.com/watch?v=pDOlgj0FBdU)
 - ...
+- [Sparks Core RDD](https://www.youtube.com/watch?v=8mhZD7rXQEY)
 
 ### 4.1 Functional Programming
 
@@ -1291,7 +1313,7 @@ count_plays("Despacito", play_count) # 3
 # Parallelize the log_of_songs to use with Spark
 # sc.parallelize() takes a list and creates an
 # RDD = Resilient Distributed Dataset, i.e., 
-# a dataset distirbuted across the Spark nodes.
+# a dataset distributed across the Spark nodes.
 # This RDD is represented by distributed_song_log
 distributed_song_log = sc.parallelize(log_of_songs)
 
@@ -1449,10 +1471,18 @@ user_log_2.select("userID").show()
 user_log_2.take(1)
 ```
 
-### 4.3 Data Wrangling
+### 4.3 Data Wrangling with Python: Spark Dataframe
 
+This section
 
-### 4.4 Spark SQL
+1. Setup
+2. Data Exploration
+3. Calculating Statistics by Hour
+4. Drop Rows with Missing Values
+5. Users Downgrade Their Accounts
+6. Extra Tips
+
+### 4.4 Data Wrangling with SQL: Spark SQL
 
 
 ## 5. Setting up Spark Clusters with AWS
