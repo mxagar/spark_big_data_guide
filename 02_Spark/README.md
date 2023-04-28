@@ -1230,9 +1230,9 @@ The inputs from both the Python API and Spark SQL are processed by the **query o
 - [SparkSession](https://www.youtube.com/watch?v=ZMSzkDG1BSQ)
 - [Load Save Dataframe](https://www.youtube.com/watch?v=Mqs8e_TmHjM)
 - [Imperative Vs. Declarative Programming](https://www.youtube.com/watch?v=gGIZvUu4H9U)
-- ...
-- [Data Wrangling](https://www.youtube.com/watch?v=pDOlgj0FBdU)
-- ...
+- [Data Wrangling with Python](https://www.youtube.com/watch?v=pDOlgj0FBdU)
+- [Spark SQL](https://www.youtube.com/watch?v=0Iv5SdKf-u0)
+- [Data Wrangling with SQL](https://www.youtube.com/watch?v=Y5nF4Q6n5pE)
 - [Sparks Core RDD](https://www.youtube.com/watch?v=8mhZD7rXQEY)
 
 ### 4.1 Functional Programming
@@ -1256,7 +1256,7 @@ So that a function passed to a method such as `map()`, `apply()` or `filter()` w
 
 These functions are called **pure functions**.
 
-In Spark, every node makes a copy of the data being processed, so the data is *immutable*. Additionally, the pure functions we apply are usually very simple; we chain them one after the other to define a more complex processing. So a function seems to be composed of multiple subfunctions. All sub-functions need to be pure.
+In Spark, every node makes a copy of the data being processed, so the data is *immutable*. Additionally, the pure functions we apply are usually very simple; we chain them one after the other to define a more complex processing. So a function seems to be composed of multiple sub-functions. All sub-functions need to be pure.
 
 The data is not copied for each of the sub-functions; instead, we perform **lazy evaluation**: all sub-functions are chained in **Direct Acyclic Graphs (DAGs)** and they are not run on the data until it is really necessary. The combinations of sub-functions or chained steps before touching any data are called **stages**.
 
@@ -1482,12 +1482,20 @@ This section focuses on the following notebook: [`4_data_wrangling.ipynb`](./lab
 5. Users Downgrade Their Accounts
 6. Extra Tips
 
+**Important**: List of available PySpark functions: [pyspark.sql.functions](https://spark.apache.org/docs/2.4.0/api/python/pyspark.sql.html#module-pyspark.sql.functions).
+
+Note that we can chain several retrieval/analysis functions one after the other. However, these are not executed due to the *lazy evaluation* principle until we `show()` or `collect()` them:
+
+- `show()` returns a dataframe with `n` (20, default) entries from the RDD; use for exploration.
+- `collect()` returns the complete result/table from the RDD in Row elements; use only when needed.
+
 ```python
 
 ### -- 1. Setup
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf # User-Defined Function
+# https://spark.apache.org/docs/2.4.0/api/python/pyspark.sql.html#module-pyspark.sql.functions
 from pyspark.sql.types import StringType
 from pyspark.sql.types import IntegerType
 from pyspark.sql.functions import desc
@@ -1688,13 +1696,385 @@ Window functions:
 
 > Window functions are a way of combining the values of ranges of rows in a DataFrame. When defining the window we can choose how to sort and group (with the `partitionBy()` method) the rows and how wide of a window we'd like to use (described by `rangeBetween()` or `rowsBetween()`).
 
+#### Quiz / Exercise
+
+Notebook: [`5_dataframe_quiz.ipynb`](./lab/03_Data_Wrangling/5_dataframe_quiz.ipynb).
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import isnan, count, when, col, desc, udf, col, sort_array, asc, avg
+# https://spark.apache.org/docs/2.4.0/api/python/pyspark.sql.html#module-pyspark.sql.functions
+from pyspark.sql.functions import sum as Fsum
+from pyspark.sql.window import Window
+from pyspark.sql.types import IntegerType
+
+spark = SparkSession \
+    .builder \
+    .appName("Data Frames practice") \
+    .getOrCreate()
+
+df = spark.read.json("../data/sparkify_log_small.json")
+
+### -- Question 1: Which page did user id "" (empty string) NOT visit?
+
+df.printSchema()
+
+blank_pages = df.filter(df.userId == '') \
+    .select(col('page') \
+    .alias('blank_pages')) \
+    .dropDuplicates()
+
+# get a list of possible pages that could be visited
+all_pages = df.select('page').dropDuplicates()
+
+# find values in all_pages that are not in blank_pages
+# these are the pages that the blank user did not go to
+for row in set(all_pages.collect()) - set(blank_pages.collect()):
+    print(row.page)
+# Submit Upgrade
+# Settings
+# Upgrade
+# Submit Downgrade
+# NextSong
+# Error
+# Save Settings
+# Logout
+# Downgrade
+
+### -- Question 2: What type of user does the empty string user id most likely refer to?
+
+# Not signed up user?
+
+### -- Question 3: How many female users do we have in the data set?
+
+df.filter(df.gender == 'F') \
+    .select('userId', 'gender') \
+    .dropDuplicates() \
+    .count()
+# 462
+
+### -- Question 4: How many songs were played from the most played artist?
+
+df.filter(df.page == 'NextSong') \
+    .select('Artist') \
+    .groupBy('Artist') \
+    .agg({'Artist':'count'}) \
+    .withColumnRenamed('count(Artist)', 'Artistcount') \
+    .sort(desc('Artistcount')) \
+    .show(1)
+# +--------+-----------+
+# |  Artist|Artistcount|
+# +--------+-----------+
+# |Coldplay|         83|
+# +--------+-----------+
+
+### -- Question 5: How many songs do users listen to on average between visiting our home page? Please round your answer to the closest integer.
+
+function = udf(lambda ishome : int(ishome == 'Home'), IntegerType())
+
+user_window = Window \
+    .partitionBy('userID') \
+    .orderBy(desc('ts')) \
+    .rangeBetween(Window.unboundedPreceding, 0)
+
+cusum = df.filter((df.page == 'NextSong') | (df.page == 'Home')) \
+    .select('userID', 'page', 'ts') \
+    .withColumn('homevisit', function(col('page'))) \
+    .withColumn('period', Fsum('homevisit').over(user_window))
+
+cusum.filter((cusum.page == 'NextSong')) \
+    .groupBy('userID', 'period') \
+    .agg({'period':'count'}) \
+    .agg({'count(period)':'avg'}).show()
+# +------------------+
+# |avg(count(period))|
+# +------------------+
+# | 6.898347107438017|
+# +------------------+
+```
+
 ### 4.4 Data Wrangling with SQL: Spark SQL
 
+The PySpark Python API is very nice for pandas users; only, we need to take into account how functional programming works and avoid for loops.
+
+PySpark has another way for allowing the users to do exactly the same things as with the Python API: The SQL interface. The SQL interface has these advantages:
+
+- We can use exactly the SQL query we'd use in a relational database.
+- The SQL query is optimized under the hood for better performance.
+- Using SQL queries avoids needing to learn a new API/library usage.
+- Any data analyst can very easily user PySpark.
+
+> You might prefer SQL over data frames because the syntax is clearer especially for teams already experienced in SQL.
+
+> Spark data frames give you more control. You can break down your queries into smaller steps, which can make debugging easier. You can also [cache](https://unraveldata.com/to-cache-or-not-to-cache/) intermediate results or [repartition](https://hackernoon.com/managing-spark-partitions-with-coalesce-and-repartition-4050c57ad5c4) intermediate results.
+
+The major difference when using SQL is that we need to register the uploaded dataframe using `df.createOrReplaceTempView("tableName")`. This step creates a temporary view in Spark which allows to query SQL-like statements to analyze the data.
+
+Once the table(s) we want have been uploaded and registered, the interface is the following:
+
+```python
+user_log = spark.read.json("../data/sparkify_log_small.json")
+user_log.createOrReplaceTempView("user_log_table")
+# We can use any kind of SQL query
+spark.sql("SELECT * FROM user_log_table LIMIT 2").show() # Get table with first 20 entries
+spark.sql("""
+          SELECT * 
+          FROM user_log_table
+          LIMIT 2"""
+          ).collect() # Get ALL Rows
+```
+
+Also, note that we can chain several retrieval/analysis functions one after the other. However, these are not executed due to the *lazy evaluation* principle until we `show()` or `collect()` them:
+
+- `show()` returns a dataframe with `n` (20, default) entries from the RDD; use for exploration.
+- `collect()` returns the complete result/table from the RDD in Row elements; use only when needed.
+
+Important links with API information:
+
+- [Spark SQL built-in functions](https://spark.apache.org/docs/latest/api/sql/index.html)
+- [Spark SQL guide](https://spark.apache.org/docs/latest/sql-getting-started.html)
+
+In the following, the same data wrangling as before is carried out, but this time using SQL.
+
+Notebook: [`7_data_wrangling-sql.ipynb`](./lab/03_Data_Wrangling/7_data_wrangling-sql.ipynb):
+
+1. Setup
+2. Create a View And Run Queries
+3. User Defined Functions
+4. Converting Results to Pandas
+
+```python
+### -- 1. Setup
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
+from pyspark.sql.types import IntegerType
+from pyspark.sql.functions import desc
+from pyspark.sql.functions import asc
+from pyspark.sql.functions import sum as Fsum
+
+import datetime
+
+import numpy as np
+import pandas as pd
+%matplotlib inline
+import matplotlib.pyplot as plt
+
+spark = SparkSession \
+    .builder \
+    .appName("Data wrangling with Spark SQL") \
+    .getOrCreate()
+
+path = "../data/sparkify_log_small.json"
+user_log = spark.read.json(path)
+
+user_log.take(1)
+
+user_log.printSchema()
+
+### -- 2. Create a View And Run Queries
+
+# Register the DataFrame as a temporary view.
+# This is necessary for SQL data wrangling.
+# This allows us to query the data using SQL-like syntax in the used session.
+# Notes:
+# - The contents in user_log are not registered in the session catalog, by default!
+# - user_log is linked to the session
+# - We create a temporary view of user_log named "user_log_table" in the catalog
+user_log.createOrReplaceTempView("user_log_table")
+
+# Once the table(s) we want have been uploaded and registered,
+# the interface is .sql()
+# BUT because of the *lazy evaluation*,
+# we need to either show() or collect():
+# - show() returns a dataframe with n (20, default) entries from the RDD; use for exploration
+# - collect() returns the complete result/table in Row elements; use only when needed
+spark.sql("SELECT * FROM user_log_table LIMIT 2").show()
+
+# Multi-line queries
+spark.sql('''
+          SELECT * 
+          FROM user_log_table 
+          LIMIT 2
+          '''
+          ).show()
+
+spark.sql('''
+          SELECT COUNT(*) 
+          FROM user_log_table 
+          '''
+          ).show()
+
+spark.sql('''
+          SELECT userID, firstname, page, song
+          FROM user_log_table 
+          WHERE userID == '1046'
+          '''
+          ).collect()
+
+# All unique pages
+spark.sql('''
+          SELECT DISTINCT page
+          FROM user_log_table 
+          ORDER BY page ASC
+          '''
+          ).show()
+
+### -- 3. User Defined Functions
+
+# We can also use User-Defined Functions (UDFs)
+# but we need to register them to we used
+# as part of the SQL statement
+spark.udf.register("get_hour",
+                   lambda x: int(datetime.datetime.fromtimestamp(x / 1000.0).hour))
+
+spark.sql('''
+          SELECT *, get_hour(ts) AS hour
+          FROM user_log_table 
+          LIMIT 1
+          '''
+          ).collect()
+
+# SQL statement with the freshly defined UDF
+# Note that the statement is not evaluated
+# due to the *lazy evaluation* principle.
+# We need to show/collect the query to get the results.
+songs_in_hour = spark.sql('''
+          SELECT get_hour(ts) AS hour, COUNT(*) as plays_per_hour
+          FROM user_log_table
+          WHERE page = "NextSong"
+          GROUP BY hour
+          ORDER BY cast(hour as int) ASC
+          '''
+          )
+songs_in_hour.show()
+
+### -- 4. Converting Results to Pandas
+
+# The chain of statements/requests
+# is also executed and the result
+# transformed into a pd.DataFrame with toPandas()
+songs_in_hour_pd = songs_in_hour.toPandas()
+print(songs_in_hour_pd)
+#    hour  plays_per_hour
+# 0     0             456
+# 1     1             454
+# 2     2             382
+# ...
+
+```
+
+#### Quiz / Exercise
+
+Notebook: [`5_dataframe_quiz.ipynb`](./lab/03_Data_Wrangling/5_dataframe_quiz.ipynb).
+
+```python
+from pyspark.sql import SparkSession
+# from pyspark.sql.functions import isnan, count, when, col, desc, udf, col, sort_array, asc, avg
+# from pyspark.sql.functions import sum as Fsum
+# from pyspark.sql.window import Window
+# from pyspark.sql.types import IntegerType
+
+# 1) import any other libraries you might need
+# 2) instantiate a Spark session 
+# 3) read in the data set located at the path "data/sparkify_log_small.json"
+# 4) create a view to use with your SQL queries
+# 5) write code to answer the quiz questions
+
+spark = SparkSession \
+    .builder \
+    .appName("Spark SQL Quiz") \
+    .getOrCreate()
+
+user_log = spark.read.json("../data/sparkify_log_small.json")
+
+user_log.createOrReplaceTempView("log_table")
+
+### -- Question 1: Which page did user id ""(empty string) NOT visit?
+
+user_log.printSchema()
+
+# SELECT distinct pages for the blank user and distinc pages for all users
+# Right join the results to find pages that blank visitor did not visit
+spark.sql("SELECT * \
+            FROM ( \
+                SELECT DISTINCT page \
+                FROM log_table \
+                WHERE userID='') AS user_pages \
+            RIGHT JOIN ( \
+                SELECT DISTINCT page \
+                FROM log_table) AS all_pages \
+            ON user_pages.page = all_pages.page \
+            WHERE user_pages.page IS NULL").show()
+
+### -- Question 2: Why might you prefer to use SQL over data frames? Why might you prefer data frames over SQL?
+
+# See intro text.
+
+### -- Question 3: How many female users do we have in the data set?
+
+spark.sql("SELECT COUNT(DISTINCT userID) \
+            FROM log_table \
+            WHERE gender = 'F'").show()
+
+### -- Question 4: How many songs were played from the most played artist?
+
+# Here is one solution
+spark.sql("SELECT Artist, COUNT(Artist) AS plays \
+        FROM log_table \
+        GROUP BY Artist \
+        ORDER BY plays DESC \
+        LIMIT 1").show()
+
+# Here is an alternative solution
+# Get the artist play counts
+play_counts = spark.sql("SELECT Artist, COUNT(Artist) AS plays \
+        FROM log_table \
+        GROUP BY Artist")
+
+# save the results in a new view
+play_counts.createOrReplaceTempView("artist_counts")
+
+# use a self join to find where the max play equals the count value
+spark.sql("SELECT a2.Artist, a2.plays FROM \
+          (SELECT max(plays) AS max_plays FROM artist_counts) AS a1 \
+          JOIN artist_counts AS a2 \
+          ON a1.max_plays = a2.plays \
+          ").show()
+
+### -- Question 5: How many songs do users listen to on average between visiting our home page? Please round your answer to the closest integer.
+
+# SELECT CASE WHEN 1 > 0 THEN 1 WHEN 2 > 0 THEN 2.0 ELSE 1.2 END;
+is_home = spark.sql("SELECT userID, page, ts, CASE WHEN page = 'Home' THEN 1 ELSE 0 END AS is_home FROM log_table \
+            WHERE (page = 'NextSong') or (page = 'Home') \
+            ")
+
+# keep the results in a new view
+is_home.createOrReplaceTempView("is_home_table")
+
+# find the cumulative sum over the is_home column
+cumulative_sum = spark.sql("SELECT *, SUM(is_home) OVER \
+    (PARTITION BY userID ORDER BY ts DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS period \
+    FROM is_home_table")
+
+# keep the results in a view
+cumulative_sum.createOrReplaceTempView("period_table")
+
+# find the average count for NextSong
+spark.sql("SELECT AVG(count_results) FROM \
+          (SELECT COUNT(*) AS count_results FROM period_table \
+GROUP BY userID, period, page HAVING page = 'NextSong') AS counts").show()
+
+```
 
 ## 5. Setting up Spark Clusters with AWS
 
+TBD.
 
 ## 6. Debugging and Optimization
 
 
 ## 7. Machine Learning with PySpark
+
+
