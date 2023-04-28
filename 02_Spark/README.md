@@ -1473,7 +1473,7 @@ user_log_2.take(1)
 
 ### 4.3 Data Wrangling with Python: Spark Dataframe
 
-This section
+This section focuses on the following notebook: [`4_data_wrangling.ipynb`](./lab/03_Data_Wrangling/4_data_wrangling.ipynb), which has these sections:
 
 1. Setup
 2. Data Exploration
@@ -1481,6 +1481,212 @@ This section
 4. Drop Rows with Missing Values
 5. Users Downgrade Their Accounts
 6. Extra Tips
+
+```python
+
+### -- 1. Setup
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import udf # User-Defined Function
+from pyspark.sql.types import StringType
+from pyspark.sql.types import IntegerType
+from pyspark.sql.functions import desc
+from pyspark.sql.functions import asc
+from pyspark.sql.functions import sum as Fsum
+
+import datetime
+
+import numpy as np
+import pandas as pd
+%matplotlib inline
+import matplotlib.pyplot as plt
+
+spark = SparkSession \
+    .builder \
+    .appName("Wrangling Data") \
+    .getOrCreate()
+
+# We can use an URL, too; e.g., "hdfs://ec2-path/my_file.json"
+path = "../data/sparkify_log_small.json"
+user_log = spark.read.json(path)
+
+### -- 2. Data Exploration
+
+# Equivalent to pd.head()
+user_log.take(5)
+
+# Column names & type
+# Important columns:
+# - level: paid or free; type of subscription - that's what we're interested in
+# - page: where the user is: "Next Song", "Home", "Submit Downgrade"
+# - userId
+user_log.printSchema()
+
+# Equivalent to pd.describe()
+user_log.describe().show()
+
+# Statistics of column "artist"
+user_log.describe("artist").show()
+
+# Statistics of column "artist"
+user_log.describe("sessionId").show()
+
+user_log.count() # 1000
+
+# Column "page", drop duplicates, sort according to content in "page"
+# Later we focus on the users that ar ein the page "Submit Downgrade"
+user_log.select("page").dropDuplicates().sort("page").show()
+
+# This is equivalent to an SQL query:
+# We take the columns we want (i.e., the events) for one userId
+# This is a user-event log
+user_log.select(["userId", "firstname", "page", "song"]).where(user_log.userId == "1046").collect()
+
+### -- 3. Calculating Statistics by Hour
+
+# UDF, udf = User-Defined Function
+# This is the core of Functional Programming:
+# We create a function which we'd like to apply to a column,
+# then we use an applying method
+get_hour = udf(lambda x: datetime.datetime.fromtimestamp(x / 1000.0).hour)
+
+# withColumn() returns the entire table/dataframe with a new column
+# df.colName` is a Column object, and we can apply our udf to it
+user_log = user_log.withColumn("hour", get_hour(user_log.ts))
+
+user_log.head()
+
+# Get number of songs played every hour
+songs_in_hour = user_log.filter(user_log.page == "NextSong")\
+                        .groupby(user_log.hour)\
+                        .count()\
+                        .orderBy(user_log.hour.cast("float"))
+
+songs_in_hour.show()
+
+# To plot the result, we need to convert it to a Pandas
+# dataframe and use Matplotlib
+songs_in_hour_pd = songs_in_hour.toPandas()
+songs_in_hour_pd.hour = pd.to_numeric(songs_in_hour_pd.hour)
+
+plt.scatter(songs_in_hour_pd["hour"], songs_in_hour_pd["count"])
+plt.xlim(-1, 24);
+plt.ylim(0, 1.2 * max(songs_in_hour_pd["count"]))
+plt.xlabel("Hour")
+plt.ylabel("Songs played")
+
+### -- 4. Drop Rows with Missing Values
+
+# Drop NAs
+user_log_valid = user_log.dropna(how = "any", subset = ["userId", "sessionId"])
+
+# There were no NAs aparently, because we still have 1000 entries
+user_log_valid.count()
+
+# There were no NAs, but we see there are some suspicious
+# empty userIds
+user_log.select("userId").dropDuplicates().sort("userId").show()
+
+# We filter out the empty userIds
+user_log_valid = user_log_valid.filter(user_log_valid["userId"] != "")
+
+# Now we have less entries
+user_log_valid.count()
+
+### -- 5. Users Downgrade Their Accounts
+
+# Let's get the entries in wich a user downgrades
+# There's only one entry (because we have a small/reduced dataset); we take its userId
+user_log_valid.filter("page = 'Submit Downgrade'").show()
+
+# We investigate the events associated with this userId
+# Kelly (userId 1138) played several songs after she decided to downgrade
+user_log.select(["userId", "firstname", "page", "level", "song"])\
+        .where(user_log.userId == "1138")\
+        .collect()
+
+# We are going to flag the transition from level paid to free
+# when a user is in the page Submit Downgrade
+# We created a UDF for that; we specify the output type
+flag_downgrade_event = udf(lambda x: 1 if x == "Submit Downgrade" else 0, IntegerType())
+
+# We apply the UDF and create a new column: "downgraded"
+user_log_valid = user_log_valid.withColumn("downgraded", flag_downgrade_event("page"))
+
+user_log_valid.head()
+
+# The example goes beyond and computes a "phase" column in which a user is.
+# In general, a user could be in several phases: trial, paid, free, etc.
+# In this example, we have only 2 phase: 1 (paid), 0 (free); however,
+# case could be extended to more phases.
+# Here, it seems a bit of a over-complication, but in more complex cases,
+# that's how we can operate.
+# To compute the phase, we use trick:
+# - we sort in chronologically descending order the entries of a user
+# - we compute a cummulative sum of the "downgraded" column using a window function
+# ???
+from pyspark.sql import Window
+
+# Take user entries in descending order and consider the window of preceeding values,
+# take all previous rows but no rows afterwards
+# ???
+windowval = Window.partitionBy("userId")\
+                  .orderBy(desc("ts"))\
+                  .rangeBetween(Window.unboundedPreceding, 0) # 
+
+# Create phase column
+user_log_valid = user_log_valid.withColumn("phase", Fsum("downgraded")\
+                               .over(windowval))
+
+# If we have more than one phase, we'll see the phase values decreasing
+user_log_valid.select(["userId", "firstname", "ts", "page", "level", "phase"])\
+              .where(user_log.userId == "1138")\
+              .sort("ts")\
+              .collect()
+# [Row(userId='1138', firstname='Kelly', ts=1513729066284, page='Home', level='paid', phase=1),
+#  Row(userId='1138', firstname='Kelly', ts=1513729066284, page='NextSong', level='paid', phase=1),
+#  Row(userId='1138', firstname='Kelly', ts=1513729313284, page='NextSong', level='paid', phase=1),
+#  Row(userId='1138', firstname='Kelly', ts=1513729552284, page='NextSong', level='paid', phase=1),
+#  ...
+#  Row(userId='1138', firstname='Kelly', ts=1513821430284, page='Home', level='free', phase=0),
+#  Row(userId='1138', firstname='Kelly', ts=1513833144284, page='NextSong', level='free', phase=0)]
+
+```
+
+#### Extra Tips
+
+General functions:
+
+- `df.select()`: returns a new DataFrame with the selected columns
+- `df.filter()`: filters rows using the given condition
+- `df.where()`: is just an alias for `filter()`
+- `df.groupBy()`: groups the DataFrame using the specified columns, so we can run aggregation on them
+- `df.sort()`: returns a new DataFrame sorted by the specified column(s). By default the second parameter 'ascending' is True.
+- `df.dropDuplicates()`: returns a new DataFrame with unique rows based on all or just a subset of columns
+- `df.withColumn()`: returns a new DataFrame by adding a column or replacing the existing column that has the same name. The first parameter is the name of the new column, the second is an expression of how to compute it.
+
+Aggregate functions:
+
+```python
+# Group by and the apply agg() or a specific aggregate function:
+# count(), countDistinct(), avg(), max(), min()
+df.groupBy("colName").min().show()
+df.groupBy("colName").agg({"salary": "avg", "age": "max"}).show()
+```
+
+User-Defined Functions:
+
+```python
+from pyspark.sql.functions import udf
+from pyspark.sql.types import IntegerType
+
+rename_sex = udf(lambda x: 1 if x == "Male" else 0, IntegerType())
+df = df.withColumn("sex", rename_sex("sex"))
+```
+
+Window functions:
+
+> Window functions are a way of combining the values of ranges of rows in a DataFrame. When defining the window we can choose how to sort and group (with the `partitionBy()` method) the rows and how wide of a window we'd like to use (described by `rangeBetween()` or `rowsBetween()`).
 
 ### 4.4 Data Wrangling with SQL: Spark SQL
 
