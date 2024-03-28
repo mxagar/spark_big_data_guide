@@ -953,7 +953,7 @@ print(flights_with_airports.show(5))
 
 ### 3.3 Introduction to Machine Learning Pipelines
 
-In this section, basic data processing is perform in form of a pipeline and a logistic regression model is trained with grid search.
+In this section, basic data processing is performed in form of a pipeline and a logistic regression model is trained with grid search.
 
 The notebook: [`03_Machine_Learning.ipynb`](./lab/02_Intro_PySpark/03_Machine_Learning.ipynb).
 
@@ -1061,6 +1061,7 @@ from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
 from pyspark.ml import Pipeline
 
 # Create a StringIndexer: Estimator that needs to be fit() and returns a Transformer
+# StringIndexer: map all unique categorical levels to numbers
 carr_indexer = StringIndexer(inputCol="carrier",
                              outputCol="carrier_index")
 
@@ -1069,6 +1070,7 @@ carr_encoder = OneHotEncoder(inputCol="carrier_index",
                              outputCol="carrier_fact")
 
 # Create a StringIndexer: Estimator that needs to be fit() and returns a Transformer
+# StringIndexer: map all unique categorical levels to numbers
 dest_indexer = StringIndexer(inputCol="dest",
                              outputCol="dest_index")
 
