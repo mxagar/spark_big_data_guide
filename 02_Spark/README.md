@@ -31,7 +31,8 @@ Table of contents:
   - [3. Introduction to PySpark](#3-introduction-to-pyspark)
     - [3.1 Basics: Getting to know PySpark](#31-basics-getting-to-know-pyspark)
       - [3.1.1 Setup](#311-setup)
-        - [Install and Run PySpark](#install-and-run-pyspark)
+        - [Install PySpark](#install-pyspark)
+        - [Run PySpark](#run-pyspark)
         - [Running on a Notebook](#running-on-a-notebook)
       - [3.1.2 Creating a Spark Session](#312-creating-a-spark-session)
       - [3.1.3 Spark SQL Dataframes: Uploading and Consulting](#313-spark-sql-dataframes-uploading-and-consulting)
@@ -318,7 +319,7 @@ The notebook: [`01_Basics.ipynb`](./lab/02_Intro_PySpark/01_Basics.ipynb).
 
 #### 3.1.1 Setup
 
-##### Install and Run PySpark
+##### Install PySpark
 
 To install PySpark locally:
 
@@ -327,6 +328,26 @@ conda activate ds # select an environment
 pip install pyspark
 pip install findspark
 ```
+
+If we are using Windows and run the cluster locally, there is an issue with the Hadoop's file system libraries, which need to be installed separately.
+
+To resolve this issue, you need to:
+
+1. **Download WinUtils**: Spark on Windows requires `WinUtils.exe`, which is part of Hadoop binaries but not included with Spark. You can download pre-compiled WinUtils binaries compatible with your Hadoop version from various GitHub repositories:
+   
+   - [cdarlint/winutils](https://github.com/cdarlint/winutils)
+   - [steveloughran/winutils](https://github.com/steveloughran/winutils)
+   - or by searching for "Hadoop WinUtils" online.
+
+2. **Set up HADOOP_HOME**:
+    - Clone the selected repository, e.g., to `C:\...\git_repositories\winutils`
+      - We choose the version we're going to use, e.g. `hadoop-3.3.5`
+      - We check that in the `<version>\bin` folder, there is a `winutils.exe` file
+    - Set `HADOOP_HOME` to the parent directory of `bin`, e.g.: `C:\...\git_repositories\winutils\hadoop-3.3.5`
+      - System Properties -> Advanced -> Environment Variables -> System Variables -> New.
+    - Add `%HADOOP_HOME%\bin` to your system's `Path` environment variable so that the WinUtils binaries are accessible from anywhere.
+
+##### Run PySpark
 
 We can launch a Spark session in the Terminal locally as follows:
 
@@ -457,6 +478,10 @@ print(session.catalog.listTables()) # []
 # NOTE: It is also possible to convert a Pandas dataframe into a Spark SQL Dataframe,
 # shown later
 flights_df = session.read.csv("../data/flights_small.csv", header=True, inferSchema=True)
+# In this case, we're runnig Spark locally and use a local dataset
+# but we could also use a URL and another format like JSON: "hdfs://ec2-path/my_file.json"
+#   path = "../data/sparkify_log_small.json"
+#   flights_df = session.read.json(path)
 
 # Register the DataFrame as a temporary view.
 # This allows us to query the data using SQL-like syntax in the used session.
@@ -480,6 +505,7 @@ flights_df_ = session.table("flights")
 
 # Equivalent to .head(2) on flights_df
 flights_df.show(2)
+flights_df.take(2)
 
 # Equivalent to .head(2) on second flights_df_: It's the same table
 flights_df_.show(2)
@@ -1119,7 +1145,6 @@ piped_data.printSchema()
 training, test = piped_data.randomSplit([.6, .4])
 ```
 
-
 #### 3.3.3 Model Tuning and Selection
 
 In this section, a logistic regression model is tuned and trained.
@@ -1277,7 +1302,7 @@ This is similar to baking bread: we collect all necessary stuff (ingredients, to
 
 #### Example Notebook: Functional Programming
 
-Notebook: [`1_procedural_vs_functional_in_python.ipynb`](./lab/03_Data_Wrangling/1_procedural_vs_functional_in_python.ipynb).
+Notebook: [`2_spark_maps_and_lazy_evaluation.ipynb`](./lab/03_Data_Wrangling/2_spark_maps_and_lazy_evaluation.ipynb).
 
 ```python
 ### -- Setup
@@ -1329,6 +1354,9 @@ count_plays("Despacito", play_count) # 3
 # a dataset distributed across the Spark nodes.
 # This RDD is represented by distributed_song_log
 distributed_song_log = sc.parallelize(log_of_songs)
+
+def convert_song_to_lowercase(song):
+    return song.lower()
 
 convert_song_to_lowercase("Havana") # 'havana'
 
