@@ -16,7 +16,14 @@ No guarantees.
   - [Basics](#basics)
   - [Data Manipulation](#data-manipulation)
     - [Aggregation Functions](#aggregation-functions)
+    - [Functional Programming: Pure Functions](#functional-programming-pure-functions)
   - [Machine Learning](#machine-learning)
+    - [Data Processing Pipeline](#data-processing-pipeline)
+      - [Load Data](#load-data)
+      - [Data processing](#data-processing)
+      - [Feature Engineering](#feature-engineering)
+      - [Pipeline](#pipeline)
+      - [Modeling](#modeling)
 
 ## Setup
 
@@ -142,6 +149,8 @@ print(session)
 
 Source: [`01_Basics.ipynb`](./02_Spark/lab/02_Intro_PySpark/01_Basics.ipynb).
 
+Topics:
+
 - Upload a CSV to Spark
 - Register a table view
 - Inspect table
@@ -239,6 +248,18 @@ print(session.catalog.listTables())
 
 Source: [`02_Manipulating_Data.ipynb`](./02_Spark/lab/02_Intro_PySpark/02_Manipulating_Data.ipynb).
 
+In general, we have two ways of manipulating data on Spark Dataframes:
+
+- Python API (*imperative*: we define all steps to final state): we use **functional programming**, i.e., we don't use for-loops, instead, transformation functions are defined and passed to `map()`, `apply()` or similar application methods. The approach where we use for loops and Co. is called **procedural programming**.
+- SQL (*declarative*: we request final state).
+
+Under the hood:
+
+- Spark is implemented in Scala (object-oriented and functional), which uses the Java Virtual Machine (JVM); Python instructions are transformed with [py4j](https://www.py4j.org/) to interact with the JVM. Functional programming is very well suited for distributed systems and programming and it is related to how MapReduce and Hadoop work.
+- We have two structures: **Direct Acyclic Graphs (DAGs)**, which chain operations or functions applied to the data and **Resilient Distributed Datasets (RDD)**, which are abstracted by Spark Dataframes. In other words, DAGs are the list of functions applied on RDDs. However, we perform **lazy evaluation**: all sub-functions are chained in Direct Acyclic Graphs (DAGs) and they are not run on the data until it is really necessary. The combinations of sub-functions or chained steps before touching any data are called **stages**.
+
+Practical topics covered in the code below:
+
 - Creating, Renaming, and Casting Columns
 - See [SQL in a Nutshell](./02_Spark/README.md#322-sql-in-a-nutshell)
 - Filtering: SQL `WHERE`
@@ -246,6 +267,7 @@ Source: [`02_Manipulating_Data.ipynb`](./02_Spark/lab/02_Intro_PySpark/02_Manipu
 - Grouping: SQL `GROUP BY`
 - Joins
 - Aggregation functions
+- Functional programming: Pure functions
 
 ```python
 from pyspark.sql.functions import col
@@ -421,7 +443,227 @@ by_month_dest.avg("dep_delay").show(5)
 by_month_dest.agg(F.stddev("dep_delay")).show(5)
 ```
 
+### Functional Programming: Pure Functions
+
+Source: [`1_procedural_vs_functional_in_python.ipynb`](./02_Spark/lab/03_Data_Wrangling/1_procedural_vs_functional_in_python.ipynb).
+
+If we use functional programming, we pass functions to `map()`, `apply()` or `filter()`. These function we pass are called **pure functions** and:
+
+- they should have no side effects on variables outside their scope,
+- they should not alter the data which is being processed.
+
+Note: 
+
+```python
+
+```
+
 ## Machine Learning
 
+Source: [`03_Machine_Learning.ipynb`](./02_Spark/lab/02_Intro_PySpark/03_Machine_Learning.ipynb).
+
+In this section, basic data processing is performed in form of a pipeline and a logistic regression model is trained with grid search.
+
+We have two types of classes defined in the module `pyspark.ml`:
+
+- `Transformer` classes: they take a Spark SQL Dataframe and `.transform()` it to yield a new Spark SQL Dataframe.
+- `Estimator` classes: they take a Spark SQL Dataframe and `.fit()` a model to it to deliver back an object, which can be a trained `Transformer` ready to `transform()` the data. For instance, a model is an `Estimator` which returns a `Transformer`; then, scoring a model consists in calling `transform()` on the returned `Transformer` using the desired dataset.
+
+In spark, data processing and feature engineering and done with **Pipelines**:
+
+- First we perform all data processing we need on the data frames: joining, casting, missing values, etc.
+- Then, we perform feature engineering by defining all `Transformer` objects we need with their inputs and output: encoding, etc.
+- After that we define the feature vector from the resulting data frame with `VectorAssembler` and assemble a `Pipeline` which contains all the `Transfomer` objects.
+- Finally, the `Pipeline` is used for fitting a model.
+
+### Data Processing Pipeline
+
+Steps:
+
+- Load data
+- Data processing
+  - Join tables
+  - Cast types: numeric values are required for modeling
+- Feature engineering
+  - New Features/Columns
+  - Remove Missing Values
+  - Encode Categoricals
+- Pipeline: Assemble a Vector and Create a Pipeline
+  - Fit and Transform the Pipeline
+  - Train/Test Split
+- Modeling
+  - Model instantiation (e.g., logistic regression)
+  - Cross-validation and hyperparameter space sampler (grid search)
+  - Fitting / training
+  - Prediction
+  - Evaluation
 
 
+#### Load Data
+
+```python
+import findspark
+findspark.init()
+
+# Import SparkSession from pyspark.sql
+from pyspark.sql import SparkSession
+
+# Create or get a (new) SparkSession: session
+session = SparkSession.builder.getOrCreate()
+
+# Print session: our SparkSession
+print(session)
+
+# Load and register flights dataframe
+flights = session.read.csv("../data/flights_small.csv", header=True, inferSchema=True)
+flights.createOrReplaceTempView("flights")
+
+# Load and register airports dataframe
+airports = session.read.csv("../data/airports.csv", header=True, inferSchema=True)
+airports.createOrReplaceTempView("airports")
+
+# Load and register planes dataframe
+planes = session.read.csv("../data/planes.csv", header=True, inferSchema=True)
+planes.createOrReplaceTempView("planes")
+
+print(session.catalog.listTables()) # airports, flights, planes
+```
+
+#### Data processing
+
+```python
+# Rename year column
+planes = planes.withColumnRenamed("year", "plane_year")
+
+# Join the DataFrames
+model_data = flights.join(planes, on="tailnum", how="leftouter")
+
+# Cast the columns to integers
+model_data = model_data.withColumn("arr_delay", model_data.arr_delay.cast("integer"))
+model_data = model_data.withColumn("air_time", model_data.air_time.cast("integer"))
+model_data = model_data.withColumn("month", model_data.month.cast("integer"))
+model_data = model_data.withColumn("plane_year", model_data.plane_year.cast("integer"))
+model_data.printSchema()
+```
+
+#### Feature Engineering
+
+```python
+from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
+from pyspark.ml import Pipeline
+
+# Create the column plane_age
+model_data = model_data.withColumn("plane_age", model_data.year - model_data.plane_year)
+
+# Create is_late
+model_data = model_data.withColumn("is_late", model_data.arr_delay > 0)
+
+# Convert to an integer: booleans need to be converted to integers, too
+model_data = model_data.withColumn("label", model_data.is_late.cast("integer"))
+
+# Remove missing values
+model_data = model_data.filter("""arr_delay is not NULL 
+                                  and dep_delay is not NULL
+                                  and air_time is not NULL
+                                  and plane_year is not NULL""")
+
+# Create a StringIndexer: Estimator that needs to be fit() and returns a Transformer
+# StringIndexer: map all unique categorical levels to numbers
+carr_indexer = StringIndexer(inputCol="carrier",
+                             outputCol="carrier_index")
+
+# Create a OneHotEncoder: Estimator that needs to be fit() and returns a Transformer
+carr_encoder = OneHotEncoder(inputCol="carrier_index",
+                             outputCol="carrier_fact")
+
+# Create a StringIndexer: Estimator that needs to be fit() and returns a Transformer
+# StringIndexer: map all unique categorical levels to numbers
+dest_indexer = StringIndexer(inputCol="dest",
+                             outputCol="dest_index")
+
+# Create a OneHotEncoder: Estimator that needs to be fit() and returns a Transformer
+dest_encoder = OneHotEncoder(inputCol="dest_index",
+                             outputCol="dest_fact")
+```
+
+#### Pipeline
+
+```python
+# Make a VectorAssembler: Transformer
+vec_assembler = VectorAssembler(inputCols=["month",
+                                           "air_time",
+                                           "carrier_fact",
+                                           "dest_fact",
+                                           "plane_age"],
+                                outputCol="features")
+
+# Make the pipeline: we append in series all the Estimator/Transformer objects
+# and the VectorAssembler
+flights_pipe = Pipeline(stages=[dest_indexer,
+                                dest_encoder,
+                                carr_indexer,
+                                carr_encoder,
+                                vec_assembler])
+
+# Fit and transform the data:
+# - first, the Estimators are fit, which generate trained Transformers
+# - then, the dataset is passed through the trained Transformers
+piped_data = flights_pipe.fit(model_data).transform(model_data)
+piped_data.printSchema()
+
+# Split the data into training and test sets
+# train 60%, test 40%
+# Always split after the complete dataset has been processed!
+training, test = piped_data.randomSplit([.6, .4])
+```
+
+#### Modeling
+
+```python
+# Import LogisticRegression: Estimator
+from pyspark.ml.classification import LogisticRegression
+# Import the evaluation submodule
+import pyspark.ml.evaluation as evals
+# Import the tuning submodule
+import numpy as np
+import pyspark.ml.tuning as tune
+
+# Create a LogisticRegression Estimator
+lr = LogisticRegression()
+
+# Create a BinaryClassificationEvaluator
+evaluator = evals.BinaryClassificationEvaluator(metricName="areaUnderROC")
+
+# Create the parameter grid
+grid = tune.ParamGridBuilder()
+
+# Add the hyperparameters to be tried in the grid
+grid = grid.addGrid(lr.regParam, np.arange(0, .1, .01))
+grid = grid.addGrid(lr.elasticNetParam, [0, 1])
+
+# Build the grid
+grid = grid.build()
+
+# Create the CrossValidator
+cv = tune.CrossValidator(estimator=lr,
+                         estimatorParamMaps=grid,
+                         evaluator=evaluator)
+
+# Fit cross validation models
+models = cv.fit(training)
+
+# Extract the best model
+best_lr = models.bestModel
+
+# We can also train the model
+# without cross validation and grid search
+not_best_lr = lr.fit(training)
+
+# Use the model to predict the test set
+# Note that the model does not have a predict() function
+# but it transforms() the data into predictions!
+test_results = best_lr.transform(test)
+
+# Evaluate the predictions
+print(evaluator.evaluate(test_results))
+```
