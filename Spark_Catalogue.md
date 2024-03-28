@@ -10,9 +10,10 @@ No guarantees.
 - [PySpark Catalogue](#pyspark-catalogue)
   - [Table of Contents](#table-of-contents)
   - [Setup](#setup)
-    - [Install and Run PySpark](#install-and-run-pyspark)
+    - [Install PySpark](#install-pyspark)
+    - [Run PySpark](#run-pyspark)
     - [Running on a Notebook](#running-on-a-notebook)
-    - [Creating a Spark Session](#creating-a-spark-session)
+    - [Creating a Spark Session (or a Spark Context)](#creating-a-spark-session-or-a-spark-context)
   - [Basics](#basics)
   - [Data Manipulation](#data-manipulation)
     - [Aggregation Functions](#aggregation-functions)
@@ -27,7 +28,7 @@ No guarantees.
 
 ## Setup
 
-### Install and Run PySpark
+### Install PySpark
 
 To install PySpark locally:
 
@@ -36,6 +37,26 @@ conda activate ds # select an environment
 pip install pyspark
 pip install findspark
 ```
+
+If we are using Windows and run the cluster locally, there is an issue with the Hadoop's file system libraries, which need to be installed separately.
+
+To resolve this issue, you need to:
+
+1. **Download WinUtils**: Spark on Windows requires `WinUtils.exe`, which is part of Hadoop binaries but not included with Spark. You can download pre-compiled WinUtils binaries compatible with your Hadoop version from various GitHub repositories:
+   
+   - [cdarlint/winutils](https://github.com/cdarlint/winutils)
+   - [steveloughran/winutils](https://github.com/steveloughran/winutils)
+   - or by searching for "Hadoop WinUtils" online.
+
+2. **Set up HADOOP_HOME**:
+    - Clone the selected repository, e.g., to `C:\...\git_repositories\winutils`
+      - We choose the version we're going to use, e.g. `hadoop-3.3.5`
+      - We check that in the `<version>\bin` folder, there is a `winutils.exe` file
+    - Set `HADOOP_HOME` to the parent directory of `bin`, e.g.: `C:\...\git_repositories\winutils\hadoop-3.3.5`
+      - System Properties -> Advanced -> Environment Variables -> System Variables -> New.
+    - Add `%HADOOP_HOME%\bin` to your system's `Path` environment variable so that the WinUtils binaries are accessible from anywhere.
+
+### Run PySpark
 
 We can launch a Spark session in the Terminal locally as follows:
 
@@ -50,7 +71,6 @@ sc # <SparkContext master=local[*] appName=PySparkShell>
 sc.version # '3.4.0'
 
 # Now, we execute the scripts we want, which are using the sc SparkContext
-
 ```
 
 An example script can be:
@@ -123,7 +143,9 @@ print(pi) # 3.14185392
 sc.stop()
 ```
 
-### Creating a Spark Session
+### Creating a Spark Session (or a Spark Context)
+
+`SparkContext` was the main entry point to Spark and is used to connect to a Spark cluster. It is responsible for coordinating the distribution of tasks, managing memory, and scheduling operations. However, since Spark 2.0, `SparkSession` has been introduced as a higher-level API that provides a unified entry point to Spark, SQL, and streaming functionality. It includes `SparkContext` under the hood and provides additional functionality for working with structured data using Spark's SQL, DataFrame, and Dataset APIs. It also provides built-in support for working with Hive, Avro, Parquet, and other file formats.
 
 Creating multiple `SparkSession`s and `SparkContext`s can cause issues, use the `SparkSession.builder.getOrCreate()` method instead, which returns an existing `SparkSession` if there's already one in the environment, or creates a new one if necessary. Usually, in a notebook, we run first
 
@@ -142,7 +164,12 @@ from pyspark.sql import SparkSession
 session = SparkSession.builder.getOrCreate()
 
 # Print session: our SparkSession
+# Note that we get a link to the UI!
+session
 print(session)
+
+# Get information of the SparkContext
+session.sparkContext.getConf().getAll()
 ```
 
 ## Basics
@@ -170,6 +197,21 @@ print(session.catalog.listTables()) # []
 # NOTE: It is also possible to convert a Pandas dataframe into a Spark SQL Dataframe,
 # shown later
 flights_df = session.read.csv("../data/flights_small.csv", header=True, inferSchema=True)
+# In this case, we're runnig Spark locally and use a local dataset
+# but we could also use a URL and another format like JSON: "hdfs://ec2-path/my_file.json"
+#   path = "../data/sparkify_log_small.json"
+#   flights_df = session.read.json(path)
+
+# To save a dataset, we can use .write.save() and choose the desired format
+# Many available formats: Parquet, Avro, ORC, JSON, CSV,...
+# Note that the resulting output is a folder!
+# Inside that folder:
+# - the resulting CSV is partitioned into several CSVs,
+#   because they are created in parallel/distributedly
+# - we have also CRC files of the CSVs: Cyclic Redundancy Check,
+#   i.e., checksums of the files to allow for data consistency checks
+out_path = "../data/flights_small.json"
+flights_df.write.save(out_path, format="json", header=True)
 
 # Register the DataFrame as a temporary view.
 # This allows us to query the data using SQL-like syntax in the used session.
@@ -193,6 +235,13 @@ flights_df_ = session.table("flights")
 
 # Equivalent to .head(2) on flights_df
 flights_df.show(2)
+flights_df.take(2)
+
+# Get column names and types
+flights_df.describe()
+
+# Get dataset Schema
+flights_df.printSchema()
 
 # Equivalent to .head(2) on second flights_df_: It's the same table
 flights_df_.show(2)
@@ -445,7 +494,7 @@ by_month_dest.agg(F.stddev("dep_delay")).show(5)
 
 ### Functional Programming: Pure Functions
 
-Source: [`1_procedural_vs_functional_in_python.ipynb`](./02_Spark/lab/03_Data_Wrangling/1_procedural_vs_functional_in_python.ipynb).
+Source: [`2_spark_maps_and_lazy_evaluation.ipynb`](./02_Spark/lab/03_Data_Wrangling/2_spark_maps_and_lazy_evaluation.ipynb).
 
 If we use functional programming, we pass functions to `map()`, `apply()` or `filter()`. These function we pass are called **pure functions** and:
 
@@ -455,7 +504,68 @@ If we use functional programming, we pass functions to `map()`, `apply()` or `fi
 Note: 
 
 ```python
+### -- Setup
 
+# Find Spark
+import findspark
+findspark.init()
+
+import pyspark
+
+# We initialize a SparkContext (an alternative to working with Sessions)
+# We use SparkContext to be able to use parallelize() later on
+sc = pyspark.SparkContext(appName="maps_and_lazy_evaluation_example")
+
+# Dataset: list of song names
+log_of_songs = [
+        "Despacito",
+        "Nice for what",
+        "No tears left to cry",
+        "Despacito",
+        "Havana",
+        "In my feelings",
+        "Nice for what",
+        "Despacito",
+        "All the stars"
+]
+
+# Parallelize the log_of_songs to use with Spark
+# sc.parallelize() takes a list and creates an
+# RDD = Resilient Distributed Dataset, i.e., 
+# a dataset distributed across the Spark nodes.
+# This RDD is represented by distributed_song_log
+distributed_song_log = sc.parallelize(log_of_songs)
+
+def convert_song_to_lowercase(song):
+    return song.lower()
+
+convert_song_to_lowercase("Havana") # 'havana'
+
+# We map() our function to the RDD
+# BUT it is not executed, due to the lazy evaluation principle.
+# We need to run an action, e.g., collect().
+# With collect() the results from all of the clusters
+# are taken and gathered into a single list on the master node
+distributed_song_log.map(convert_song_to_lowercase)
+
+# With collect() the results from all of the clusters
+# are taken and gathered into a single list on the master node
+distributed_song_log.map(convert_song_to_lowercase).collect()
+# ['despacito',
+#  'nice for what',
+#  'no tears left to cry',
+#  'despacito',
+#  'havana',
+#  'in my feelings',
+#  'nice for what',
+#  'despacito',
+#  'all the stars']
+
+# Usually, the map() functions are defined as lambdas
+# or anonymoud functions.
+# Note that we are using the Pythons built-in lower() function
+# inside Spark!
+distributed_song_log.map(lambda song: song.lower()).collect()
 ```
 
 ## Machine Learning
