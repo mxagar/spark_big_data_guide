@@ -507,6 +507,12 @@ flights_df_ = session.table("flights")
 flights_df.show(2)
 flights_df.take(2)
 
+# Get column names and types
+flights_df.describe().show()
+
+# Number of entries
+flights_df.count()
+
 # Equivalent to .head(2) on second flights_df_: It's the same table
 flights_df_.show(2)
 ```
@@ -1479,7 +1485,7 @@ user_log = spark.read.json(path)
 user_log.printSchema()
 
 # Get column names and types
-user_log.describe()
+user_log.describe().show()
 
 # Equivalent to head()
 user_log.show(n=1)
