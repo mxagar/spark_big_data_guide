@@ -321,12 +321,41 @@ The notebook: [`01_Basics.ipynb`](./lab/02_Intro_PySpark/01_Basics.ipynb).
 
 ##### Install PySpark
 
-To install PySpark locally:
+If you already have a Python environment with the usual ML libraries and you'd like to add PySpark:
 
 ```bash
-conda activate ds # select an environment
-pip install pyspark
-pip install findspark
+# Install PySpark manually
+python -m pip install pyspark
+python -m pip install findspark
+```
+
+Alternatively, if you want to create a new Python environment (recommended), you can do it with [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html):
+
+```bash
+# Set proxy, if required
+
+# Create an environment
+conda create -n ds python=3.9 pip
+conda activate ds
+
+# Install pip-tools
+python -m pip install -U pip-tools
+
+# Generate pinned requirements.txt
+# PySpark is listed there
+pip-compile requirements.in
+
+# Install pinned requirements, as always
+python -m pip install -r requirements.txt
+
+# If required, add new dependencies to requirements.in and sync
+# i.e., update environment
+pip-compile requirements.in
+pip-sync requirements.txt
+python -m pip install -r requirements.txt
+
+# To delete the conda environment, if required
+conda remove --name ds --all
 ```
 
 If we are using Windows and run the cluster locally, there is an issue with the Hadoop's file system libraries, which need to be installed separately.
@@ -1603,7 +1632,7 @@ user_log.select(["userId", "firstname", "page", "song"]).where(user_log.userId =
 # This is the core of Functional Programming:
 # We create a function which we'd like to apply to a column,
 # then we use an applying method
-get_hour = udf(lambda x: datetime.datetime.fromtimestamp(x / 1000.0).hour)
+get_hour = udf(lambda x: datetime.datetime.fromtimestamp(x / 1000.0).hour, IntegerType())
 
 # withColumn() returns the entire table/dataframe with a new column
 # df.colName` is a Column object, and we can apply our udf to it
