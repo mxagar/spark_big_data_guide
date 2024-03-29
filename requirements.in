@@ -1,0 +1,10 @@
+numpy
+pandas
+matplotlib
+scikit-learn
+PyYAML
+pytest
+python-dotenv
+jupyter
+pyspark
+findspark
