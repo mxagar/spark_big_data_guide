@@ -334,7 +334,8 @@ Practical topics covered in the code below:
 - Joins
 - Aggregation functions
 - Functional programming: Pure functions
-- More data wrangling with the Python API
+- Music Service Example: Data wrangling with the Python API
+- Music Service Example: Data wrangling with the SQL API
 
 ```python
 from pyspark.sql.functions import col
@@ -586,9 +587,12 @@ distributed_song_log.map(convert_song_to_lowercase).collect()
 distributed_song_log.map(lambda song: song.lower()).collect()
 ```
 
-### More Data Wrangling with the Python API
+### Music Service Example: Data Wrangling with the Python API
 
 Source: [`4_data_wrangling.ipynb`](./02_Spark/lab/03_Data_Wrangling/4_data_wrangling.ipynb)
+
+The Python API is similar to Pandas. Functional programming is used, i.e., we avoid loops or similar constructs, and instead we apply functions.
+PySpark has also the SQL API, with the advantage that we don't need to learn a new API: we just use SQL! (see next section).
 
 Topics:
 
@@ -621,6 +625,8 @@ spark = SparkSession \
     .builder \
     .appName("Wrangling Data") \
     .getOrCreate()
+
+spark.sparkContext.setLogLevel("ERROR")
 
 # We can use an URL, too; e.g., "hdfs://ec2-path/my_file.json"
 path = "../data/sparkify_log_small.json"
@@ -787,7 +793,143 @@ user_log_valid.select(["userId", "firstname", "ts", "page", "level", "phase"])\
 #  Row(userId='1138', firstname='Kelly', ts=1513833144284, page='NextSong', level='free', phase=0)]
 ```
 
+### Music Service Example: Data Wrangling with the SQL API
 
+Source: [`7_data_wrangling-sql.ipynb`](./02_Spark/lab/03_Data_Wrangling/7_data_wrangling-sql.ipynb).
+
+Instead of using the Python API, we can use the SQL API: with it, we just use SQL, no need to learn any new API!
+
+The major difference when using SQL is that we do need to register the uploaded Dataframe using `df.createOrReplaceTempView("tableName")`. This step creates a temporary view in Spark which allows to query SQL-like statements to analyze the data.
+
+Also, note that we can chain several retrieval/analysis functions one after the other. However, these are not executed due to the lazy evaluation principle until we `show()` or `collect()` them:
+
+- `show()` returns a dataframe with n (20, default) entries from the RDD; use for exploration.
+- `collect()` returns the complete result/table from the RDD in Row elements; use only when needed.
+
+```python
+### -- 1. Setup
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
+from pyspark.sql.types import IntegerType
+from pyspark.sql.functions import desc
+from pyspark.sql.functions import asc
+from pyspark.sql.functions import sum as Fsum
+
+import datetime
+
+import numpy as np
+import pandas as pd
+%matplotlib inline
+import matplotlib.pyplot as plt
+
+spark = SparkSession \
+    .builder \
+    .appName("Data wrangling with Spark SQL") \
+    .getOrCreate()
+
+spark.sparkContext.setLogLevel("ERROR")
+
+path = "../data/sparkify_log_small.json"
+user_log = spark.read.json(path)
+
+user_log.take(1)
+
+user_log.printSchema()
+
+### -- 2. Create a View And Run Queries
+
+# Register the DataFrame as a temporary view.
+# This is necessary for SQL data wrangling.
+# This allows us to query the data using SQL-like syntax in the used session.
+# Notes:
+# - The contents in user_log are not registered in the session catalog, by default!
+# - user_log is linked to the session
+# - We create a temporary view of user_log named "user_log_table" in the catalog
+user_log.createOrReplaceTempView("user_log_table")
+
+# Once the table(s) we want have been uploaded and registered,
+# the interface is .sql()
+# BUT because of the *lazy evaluation*,
+# we need to either show() or collect():
+# - show() returns a dataframe with n (20, default) entries from the RDD; use for exploration
+# - collect() returns the complete result/table in Row elements; use only when needed
+spark.sql("SELECT * FROM user_log_table LIMIT 2").show()
+
+# Multi-line queries
+spark.sql('''
+          SELECT * 
+          FROM user_log_table 
+          LIMIT 2
+          '''
+          ).show()
+
+spark.sql('''
+          SELECT COUNT(*) 
+          FROM user_log_table 
+          '''
+          ).show()
+
+spark.sql('''
+          SELECT userID, firstname, page, song
+          FROM user_log_table 
+          WHERE userID == '1046'
+          '''
+          ).collect()
+
+# All unique pages
+spark.sql('''
+          SELECT DISTINCT page
+          FROM user_log_table 
+          ORDER BY page ASC
+          '''
+          ).show()
+
+### -- 3. User Defined Functions
+
+# We can also use User-Defined Functions (UDFs)
+# but we need to register them to we used
+# as part of the SQL statement
+spark.udf.register("get_hour",
+                   lambda x: int(datetime.datetime.fromtimestamp(x / 1000.0).hour),
+                   IntegerType())
+
+spark.sql('''
+          SELECT *, get_hour(ts) AS hour
+          FROM user_log_table 
+          LIMIT 1
+          '''
+          ).collect()
+
+# SQL statement with the freshly defined UDF
+# Note that the statement is not evaluated
+# due to the *lazy evaluation* principle.
+# We need to show/collect the query to get the results.
+songs_in_hour = spark.sql('''
+          SELECT get_hour(ts) AS hour, COUNT(*) as plays_per_hour
+          FROM user_log_table
+          WHERE page = "NextSong"
+          GROUP BY hour
+          ORDER BY cast(hour as int) ASC
+          '''
+          )
+songs_in_hour.show()
+
+### -- 4. Converting Results to Pandas
+
+# The chain of statements/requests
+# is also executed and the result
+# transformed into a pd.DataFrame with toPandas()
+songs_in_hour_pd = songs_in_hour.toPandas()
+print(songs_in_hour_pd)
+#    hour  plays_per_hour
+# 0     0             456
+# 1     1             454
+# 2     2             382
+# ...
+
+```
 
 ## Machine Learning
 
@@ -809,6 +951,8 @@ In spark, data processing and feature engineering and done with **Pipelines**:
 
 ### Data Processing Pipeline
 
+Source: [`03_Machine_Learning.ipynb`](./02_Spark/lab/02_Intro_PySpark/03_Machine_Learning.ipynb)
+
 Steps:
 
 - Load data
@@ -828,7 +972,6 @@ Steps:
   - Fitting / training
   - Prediction
   - Evaluation
-
 
 #### Load Data
 
