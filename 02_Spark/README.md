@@ -1590,6 +1590,8 @@ spark = SparkSession \
     .appName("Wrangling Data") \
     .getOrCreate()
 
+spark.sparkContext.setLogLevel("ERROR")
+
 # We can use an URL, too; e.g., "hdfs://ec2-path/my_file.json"
 path = "../data/sparkify_log_small.json"
 user_log = spark.read.json(path)
@@ -1774,7 +1776,7 @@ Window functions:
 
 #### Quiz / Exercise
 
-Notebook: [`5_dataframe_quiz.ipynb`](./lab/03_Data_Wrangling/5_dataframe_quiz.ipynb).
+Notebook: [`6_dataframe_quiz_solution.ipynb`](./lab/03_Data_Wrangling/6_dataframe_quiz_solution.ipynb).
 
 ```python
 from pyspark.sql import SparkSession
@@ -1788,6 +1790,8 @@ spark = SparkSession \
     .builder \
     .appName("Data Frames practice") \
     .getOrCreate()
+
+spark.sparkContext.setLogLevel("ERROR")
 
 df = spark.read.json("../data/sparkify_log_small.json")
 
@@ -1942,6 +1946,8 @@ spark = SparkSession \
     .appName("Data wrangling with Spark SQL") \
     .getOrCreate()
 
+spark.sparkContext.setLogLevel("ERROR")
+
 path = "../data/sparkify_log_small.json"
 user_log = spark.read.json(path)
 
@@ -2003,7 +2009,8 @@ spark.sql('''
 # but we need to register them to we used
 # as part of the SQL statement
 spark.udf.register("get_hour",
-                   lambda x: int(datetime.datetime.fromtimestamp(x / 1000.0).hour))
+                   lambda x: int(datetime.datetime.fromtimestamp(x / 1000.0).hour),
+                   IntegerType())
 
 spark.sql('''
           SELECT *, get_hour(ts) AS hour
@@ -2043,7 +2050,7 @@ print(songs_in_hour_pd)
 
 #### Quiz / Exercise
 
-Notebook: [`5_dataframe_quiz.ipynb`](./lab/03_Data_Wrangling/5_dataframe_quiz.ipynb).
+Notebook: [`9_spark_sql_quiz_solution.ipynb`](./lab/03_Data_Wrangling/9_spark_sql_quiz_solution.ipynb).
 
 ```python
 from pyspark.sql import SparkSession
