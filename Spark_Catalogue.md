@@ -18,6 +18,7 @@ No guarantees.
   - [Data Manipulation](#data-manipulation)
     - [Aggregation Functions](#aggregation-functions)
     - [Functional Programming: Pure Functions](#functional-programming-pure-functions)
+    - [More Data Wrangling with the Python API](#more-data-wrangling-with-the-python-api)
   - [Machine Learning](#machine-learning)
     - [Data Processing Pipeline](#data-processing-pipeline)
       - [Load Data](#load-data)
@@ -238,7 +239,10 @@ flights_df.show(2)
 flights_df.take(2)
 
 # Get column names and types
-flights_df.describe()
+flights_df.describe().show()
+
+# Number of entries
+flights_df.count()
 
 # Get dataset Schema
 flights_df.printSchema()
@@ -295,7 +299,10 @@ print(session.catalog.listTables())
 
 ## Data Manipulation
 
-Source: [`02_Manipulating_Data.ipynb`](./02_Spark/lab/02_Intro_PySpark/02_Manipulating_Data.ipynb).
+Sources: 
+
+- [`02_Manipulating_Data.ipynb`](./02_Spark/lab/02_Intro_PySpark/02_Manipulating_Data.ipynb).
+- [`4_data_wrangling.ipynb`](./02_Spark/lab/03_Data_Wrangling/4_data_wrangling.ipynb).
 
 In general, we have two ways of manipulating data on Spark Dataframes:
 
@@ -317,6 +324,7 @@ Practical topics covered in the code below:
 - Joins
 - Aggregation functions
 - Functional programming: Pure functions
+- More data wrangling with the Python API
 
 ```python
 from pyspark.sql.functions import col
@@ -567,6 +575,76 @@ distributed_song_log.map(convert_song_to_lowercase).collect()
 # inside Spark!
 distributed_song_log.map(lambda song: song.lower()).collect()
 ```
+
+### More Data Wrangling with the Python API
+
+Source: [`4_data_wrangling.ipynb`](./02_Spark/lab/03_Data_Wrangling/4_data_wrangling.ipynb)
+
+Topics:
+
+- Select + Where
+- Drop duplicates
+- UDFs: user-defined functions
+- Filter, group by, count, order by
+
+```python
+from pyspark.sql.functions import udf # User-Defined Function
+# https://spark.apache.org/docs/2.4.0/api/python/pyspark.sql.html#module-pyspark.sql.functions
+
+# Column names & type
+# Important columns:
+# - level: paid or free; type of subscription - that's what we're interested in
+# - page: where the user is: "Next Song", "Home", "Submit Downgrade"
+# - userId
+user_log.printSchema()
+# root
+#  |-- artist: string (nullable = true)
+#  |-- auth: string (nullable = true)
+#  |-- firstName: string (nullable = true)
+#  |-- gender: string (nullable = true)
+#  |-- itemInSession: long (nullable = true)
+#  |-- lastName: string (nullable = true)
+#  |-- length: double (nullable = true)
+#  |-- level: string (nullable = true)
+#  |-- location: string (nullable = true)
+#  |-- method: string (nullable = true)
+#  |-- page: string (nullable = true)
+#  |-- registration: long (nullable = true)
+#  |-- sessionId: long (nullable = true)
+#  |-- song: string (nullable = true)
+#  |-- status: long (nullable = true)
+#  |-- ts: long (nullable = true)
+#  |-- userAgent: string (nullable = true)
+#  |-- userId: string (nullable = true)
+
+# Column "page", drop duplicates, sort according to content in "page"
+# Later we focus on the users that ar ein the page "Submit Downgrade"
+user_log.select("page").dropDuplicates().sort("page").show()
+
+# This is equivalent to an SQL query:
+# We take the columns we want (i.e., the events) for one userId
+# This is a user-event log
+user_log.select(["userId", "firstname", "page", "song"]).where(user_log.userId == "1046").collect()
+
+# UDF, udf = User-Defined Function
+# This is the core of Functional Programming:
+# We create a function which we'd like to apply to a column,
+# then we use an applying method
+get_hour = udf(lambda x: datetime.datetime.fromtimestamp(x / 1000.0).hour)
+
+# withColumn() returns the entire table/dataframe with a new column
+# df.colName` is a Column object, and we can apply our udf to it
+user_log = user_log.withColumn("hour", get_hour(user_log.ts))
+
+# Get number of songs played every hour
+songs_in_hour = user_log.filter(user_log.page == "NextSong")\
+                        .groupby(user_log.hour)\
+                        .count()\
+                        .orderBy(user_log.hour.cast("float"))
+songs_in_hour.show()
+```
+
+
 
 ## Machine Learning
 
