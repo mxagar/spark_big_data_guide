@@ -2153,7 +2153,60 @@ GROUP BY userID, period, page HAVING page = 'NextSong') AS counts").show()
 
 ## 5. Setting up Spark Clusters with AWS
 
-TBD.
+Until now we have worked on our local machine, so data was not distributed, nor was big. To start working on big data, we need a cluster.
+
+Contents of this section:
+
+> - Difference between setting up a Spark Cluster using both Local and Standalone Mode
+> - Set up Spark Cluster in AWS
+> - Use Spark UI
+> - Use AWS CLI
+> - Create EMR using AWS CLI
+> - Create EMR Cluster
+> - Test Port Forwarding
+> - Use Notebooks on your Spark Cluster
+> - Write Spark Scripts
+> - Store and Retrieve data on the Cloud
+> - Read and Write to Amazon S3
+> - Understand the distinction between HDFS and S3
+> - Reading and Writing Data to HDFS
+
+Video links:
+
+- [From Local Mode To Cluster Mode](https://www.youtube.com/watch?v=EeBWbABm_Qc)
+- [Setup Instructions AWS](https://www.youtube.com/watch?v=ZVdAEMGDFdo)
+
+
+### 5.1 Introduction
+
+When we work with big data, we can't work in local mode anymore, but we need to use the cluster mode. Spark has 3 modes to work on a cluster:
+
+- Standalone: built-in cluster management; users submit jobs to a remote cluster.
+- MESOS: another 3rd party cluster management, for big teams.
+- YARN: another 3rd party cluster management, for big teams.
+
+We use AWS S3 for long term data storage and AWS EMR (Elastic MapReduce clusters) to run a Spark cluster, where data is loaded to memory; then, we connect to the cluster from our local machine and execute the analysis on the remote cluster.
+
+![Cloud Setup](./pics/cloud_setup.jpg)
+
+### 5.2 Set Up AWS
+
+Recall that Big Data started originally with Hadoop: HDFS (file system) + MapReduce (Computation Algorithm).
+Spark replaces MapReduce, but it doesn't have a file system, so it needs to use a 3rd party distributed file system, e.g., HDFS or even AWS S3.
+
+We could use EC2 to create a cluster manually, installing everything we need; however, that's a lot of steps, and AWS has already a service which does that: **AWS EMR (Elastic MapReduce)**. EMR can create a Spark cluster on top of EC2.
+
+Source of steps:
+
+- [Setup Instructions AWS](https://www.youtube.com/watch?v=ZVdAEMGDFdo)
+- [Getting started with AWS EMR](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-gs.html#emr-getting-started-plan-and-configure)
+
+    Log in to AWS as root
+    Create an SSH key pair
+        Go to EC2 Service console
+        
+
+
 
 ## 6. Debugging and Optimization
 
