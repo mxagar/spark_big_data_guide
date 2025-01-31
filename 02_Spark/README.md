@@ -34,6 +34,7 @@ Table of contents:
         - [Install PySpark](#install-pyspark)
         - [Run PySpark](#run-pyspark)
         - [Running on a Notebook](#running-on-a-notebook)
+        - [Spark UI](#spark-ui)
       - [3.1.2 Creating a Spark Session](#312-creating-a-spark-session)
       - [3.1.3 Spark SQL Dataframes: Uploading and Consulting](#313-spark-sql-dataframes-uploading-and-consulting)
       - [3.1.4 Common Methods and Attributes of the SQL Dataframe](#314-common-methods-and-attributes-of-the-sql-dataframe)
@@ -484,6 +485,10 @@ sc.stop()
 
 :warning: **I had issues while running the notebook on VSCode so I had to switch to the browser!** I think this can be solved by 
 
+##### Spark UI
+
+When we start a Spark context/session, a Spark web UI is started at [http://localhost:4040/](http://localhost:4040/); if the port is taken, the next is used, e.g., `4041, 4042, ...`
+
 #### 3.1.2 Creating a Spark Session
 
 The `SparkContext` is the main entry point or interaction object in Spark. However, since version 2.0, the `SparkSession` was introduced, which is a higher level API that serves also as an entry point.
@@ -568,7 +573,7 @@ flights_df_.show(2)
 
 #### 3.1.4 Common Methods and Attributes of the SQL Dataframe
 
-You can use several attributes and methods of the `flights_df` DataFrame object to explore the data. Here are some of the most important ones (ficticious column values):
+You can use several attributes and methods of the `flights_df` DataFrame object to explore the data. Here are some of the most important ones (made up column values):
 
 - `printSchema()`: This method prints the schema of the DataFrame, which shows the column names and their data types.
 
