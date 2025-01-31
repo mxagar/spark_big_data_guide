@@ -64,7 +64,7 @@ More notes:
 - For the user, elastic search is just a server which accepts JSONs and returns JSONs.
 - On top of Elastic Search sits Kibana, which is a web UI for visualizing the data.
     - Kibana is often used to aggregate data.
-    - We can du log analytics.
+    - We can do log analytics.
 
 Elastic search structure concepts:
 
@@ -85,9 +85,11 @@ How does elastic search scale?
 - When we create a document, it is hashed and directed to a given shard; a hash table keeps document and shard mappings.
 - Each shard has its own index/indices; thus, when we search, all shards start looking in their index tables.
 - There are primary and replica shards to increase resiliency and robustness, in case one node fails.
-    - Primary and replica shards are scattered in different nodes; the primary shard is the original, the replicas are copies, but the all contain all the documents and the index tables.
+    - Primary and replica shards are scattered in different nodes; the primary shard is the original, the replicas are copies, but they all contain all the documents and the index tables.
     - Every time we append a document to a shard (write), that's appended to the primary shard, its index is updated, and the shard is replicated to the replicas spread in the cluster.
     - If we look for a term (read), any primary/replica shard can be used.
+
+See my guide on Elasticsearch: [mxagar/elastic_search_guide](https://github.com/mxagar/elastic_search_guide).
 
 ## Hadoop
 
@@ -132,7 +134,7 @@ Two components:
     - They store the data.
     - They communicate with their master NameNode to report their status regularly.
     - Actions: read and write data, replicate, process, etc.
-    - there are usually many DataNodes.
+    - There are usually many DataNodes.
 
 If we upload a 30 TB file/data to Hadoop, it goes to the NameNode, which chops it into chunks and stores the chunks in different DataNodes. Additionally, the chunks are replicated (by default, 3x) in different DataNodes to achieve resiliency and robustness (in case a DataNode goes down).
 
