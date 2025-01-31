@@ -82,8 +82,11 @@ Table of contents:
     - [4.4 Data Wrangling with SQL: Spark SQL](#44-data-wrangling-with-sql-spark-sql)
       - [Quiz / Exercise](#quiz--exercise-1)
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
+    - [5.1 Introduction](#51-introduction)
+    - [5.2 Set Up AWS](#52-set-up-aws)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
+
 
 ## 1. Introduction
 
@@ -100,7 +103,9 @@ Section videos:
 
 Video: [Project Overview](https://www.youtube.com/watch?v=lPCzCEG2yRs)
 
-I made a dedicated repository for the Udacity final project: [sparkify_customer_churn](https://github.com/mxagar/sparkify_customer_churn). I have non-committed link to that repository in the folder [`lab`](./lab/); additionally, all coding examples from this module are collected in that folder [`lab`](./lab/).
+I made a dedicated repository for the Udacity final project: [sparkify_customer_churn](https://github.com/mxagar/sparkify_customer_churn).
+
+All coding examples from this module are collected in that folder [`lab`](./lab/).
 
 Key ideas of the project:
 
@@ -268,7 +273,7 @@ Obviously, we want to use the cluster-mode; the local-mode is used to learn and 
 
 Additionally, we have:
 
-- A **master node**, which has the **driver program**, and within it sits the **SparkContext**. We always have and interact with the Spark context.
+- A **master node**, which has the **driver program**, and within the **SparkContext** sits . We always have and interact with the Spark context.
 - The Spark context talks to the **cluster manager**, which is outside from the **master node**. That manager can be, for instance Yarn and it takes care of the resource distribution.
 - The **cluster manager** handles the **worker nodes**, which are independent from the manager and are usually distributed. It requests containers with certain capacities within them depending on the workload.
 
@@ -335,27 +340,27 @@ Alternatively, if you want to create a new Python environment (recommended), you
 # Set proxy, if required
 
 # Create an environment
-conda create -n ds python=3.9 pip
-conda activate ds
-
-# Install pip-tools
-python -m pip install -U pip-tools
+conda env create -f conda.yaml
+conda activate spark
 
 # Generate pinned requirements.txt
 # PySpark is listed there
 pip-compile requirements.in
 
-# Install pinned requirements, as always
+# Install pinned requirements
+pip-sync requirements.txt
+# ... or
 python -m pip install -r requirements.txt
 
 # If required, add new dependencies to requirements.in and sync
 # i.e., update environment
 pip-compile requirements.in
 pip-sync requirements.txt
+# ... or
 python -m pip install -r requirements.txt
 
 # To delete the conda environment, if required
-conda remove --name ds --all
+conda remove --name spark --all
 ```
 
 If we are using Windows and run the cluster locally, there is an issue with the Hadoop's file system libraries, which need to be installed separately.
@@ -368,7 +373,7 @@ To resolve this issue, you need to:
    - [steveloughran/winutils](https://github.com/steveloughran/winutils)
    - or by searching for "Hadoop WinUtils" online.
 
-2. **Set up HADOOP_HOME**:
+2. **Set up `HADOOP_HOME`**:
     - Clone the selected repository, e.g., to `C:\...\git_repositories\winutils`
       - We choose the version we're going to use, e.g. `hadoop-3.3.5`
       - We check that in the `<version>\bin` folder, there is a `winutils.exe` file
@@ -376,12 +381,25 @@ To resolve this issue, you need to:
       - System Properties -> Advanced -> Environment Variables -> System Variables -> New.
     - Add `%HADOOP_HOME%\bin` to your system's `Path` environment variable so that the WinUtils binaries are accessible from anywhere.
 
+3. **Install Java and setup `JAVA_HOME`**:
+    - Download: [https://adoptium.net/download/](https://adoptium.net/download/); :warning: you need  the JDK, not the JRE!
+    - Set the `JAVA_HOME` variable to point to the `java.exe` binary, e.g., `C:\Program Files\Eclipse Adoptium\jdk-21.0.6.7-hotspot`.
+    - Add `%JAVA_HOME%\bin` to your system's `Path` environment variable.
+
+4. **If you are still getting problems, add these environment variables**:
+    ```bash
+    PYSPARK_PYTHON="C:\Users\...\AppData\Local\anaconda3\envs\spark\python.exe"
+    PYSPARK_DRIVER_PYTHON="C:\Users\...\AppData\Local\anaconda3\envs\spark\python.exe"
+    SPARK_HOME="C:\Users\...\AppData\Local\anaconda3\envs\spark\Lib\site-packages\pyspark"
+    # Path += %SPARK_HOME%\bin
+    ```
+
 ##### Run PySpark
 
 We can launch a Spark session in the Terminal locally as follows:
 
 ```bash
-conda activate ds
+conda activate spark
 pyspark
 # SparkContext available as 'sc'
 # Web UI at: http://localhost:4040/
@@ -426,7 +444,7 @@ export PYSPARK_DRIVER_PYTHON_OPTS='notebook'
 Then, we restart `pyspark` and launch jupyter from it:
 
 ```bash
-conda activate ds
+conda activate spark
 pyspark
 jupyter
 ```
@@ -434,7 +452,7 @@ jupyter
 **Alternatively**, we can use `findspark` without modifying the environment variables and without starting pyspark from outside:
 
 ```bash
-conda activate ds
+conda activate spark
 jupyter lab
 ```
 
@@ -463,6 +481,8 @@ pi = 4 * count / num_samples
 print(pi) # 3.14185392
 sc.stop()
 ```
+
+:warning: **I had issues while running the notebook on VSCode so I had to switch to the browser!** I think this can be solved by 
 
 #### 3.1.2 Creating a Spark Session
 
