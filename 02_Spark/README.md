@@ -483,7 +483,7 @@ print(pi) # 3.14185392
 sc.stop()
 ```
 
-:warning: **I had issues while running the notebook on VSCode so I had to switch to the browser!** I think this can be solved by 
+:warning: **I had issues while running the notebook on VSCode so I had to switch to the browser!** I think this can be solved, though.
 
 ##### Spark UI
 
@@ -640,7 +640,7 @@ pd_counts.head()
 
 #### 3.1.7 Sparkifying: Convert a Pandas Dataframe into a Spark SQL Dataframe
 
-In previous sections, a CSV was directly loaded to Spark andd the resulting Spark SQL Dataframe registered as a temporary view to the catalog of the session.
+In previous sections, a CSV was directly loaded to Spark and the resulting Spark SQL Dataframe registered as a temporary view to the catalog of the session.
 
 Now, instead of reading CSV tables from Spark, we upload Pandas dataframes.
 
@@ -731,7 +731,7 @@ df = df.withColumn("air_time", df.arr_delay.cast("double"))
 # Rename column "air_time" -> "flight_duration"
 # BUT, the old column is still there if it has another name;
 # we can drop it using .select(), as shown below
-df = df.withColumn("flight_duration", flights.air_time)
+df = df.withColumn("flight_duration", df.air_time)
 
 # Another way to rename column names:
 # this function allows to use two column name strings
@@ -870,7 +870,7 @@ long_flights2.show(2)
 
 #### 3.2.4 Selecting Columns: SELECT - select(), selectExpr(), alias()
 
-The `select()` method is equivalent to the `SELECT` SQL operator: it can take several comma-separated column names or `Column` objects (`df.col`) and returns a table with them. In contrast, the `withColumn()` method returns the entire table. Therefore, if we want to drop unnecessary columns, we can use `select()`.
+The `select()` method is equivalent to the `SELECT` SQL operator: it can take several comma-separated column names or `Column` objects (`df.colName`) and returns a table with them. In contrast, the `withColumn()` method returns the entire table. Therefore, if we want to drop unnecessary columns, we can use `select()`.
 
 If we want to perform a more sophisticated selection, as in SQL, we can use `selectExpr()` and pass comma-separated SQL strings; if we want to change the name of the selected/transformed column, we can use `alias()`, equivalent to `AS` in SQL.
 
