@@ -2196,16 +2196,47 @@ Spark replaces MapReduce, but it doesn't have a file system, so it needs to use 
 
 We could use EC2 to create a cluster manually, installing everything we need; however, that's a lot of steps, and AWS has already a service which does that: **AWS EMR (Elastic MapReduce)**. EMR can create a Spark cluster on top of EC2.
 
-Source of steps:
+Links:
 
 - [Setup Instructions AWS](https://www.youtube.com/watch?v=ZVdAEMGDFdo)
 - [Getting started with AWS EMR](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-gs.html#emr-getting-started-plan-and-configure)
 
-    Log in to AWS as root
-    Create an SSH key pair
-        Go to EC2 Service console
-        
+Before creating an EMR instance, we need an SSH key pair:
 
+    Log in to AWS as root
+    Go to EC2 Service console
+        Network & securty > Key Pairs
+          Create key pais
+          Name: pyspark-emr-test-kp
+          Download the file pyspark-emr-test-kp.pem
+          and save it without pushing it to the repo
+
+The downloaded key is one part of the pair; the other is in the AWS cloud.
+
+Then, well create an EMR cluster:
+
+    Log in to AWS as root
+    Go to EMR service console
+        EMR on EC2: Clusters
+        Create cluster
+          Name: udacity-spark-cluster
+          EMR 7.0.0
+          Spark
+            Default options
+          Cluster configuration
+            m5.xlarge
+          Security and configuration
+            Select created key pair: pyspark-emr-test-kp
+            
+
+
+#### AWS CLI
+
+[AWS CLI reference](https://docs.aws.amazon.com/cli/latest/reference/)
+
+#### Create EMR with AWS CLI
+
+TBD.
 
 
 ## 6. Debugging and Optimization
