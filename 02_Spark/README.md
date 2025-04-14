@@ -34,6 +34,7 @@ Table of contents:
         - [Install PySpark](#install-pyspark)
         - [Run PySpark](#run-pyspark)
         - [Running on a Notebook](#running-on-a-notebook)
+        - [Spark UI](#spark-ui)
       - [3.1.2 Creating a Spark Session](#312-creating-a-spark-session)
       - [3.1.3 Spark SQL Dataframes: Uploading and Consulting](#313-spark-sql-dataframes-uploading-and-consulting)
       - [3.1.4 Common Methods and Attributes of the SQL Dataframe](#314-common-methods-and-attributes-of-the-sql-dataframe)
@@ -82,8 +83,11 @@ Table of contents:
     - [4.4 Data Wrangling with SQL: Spark SQL](#44-data-wrangling-with-sql-spark-sql)
       - [Quiz / Exercise](#quiz--exercise-1)
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
+    - [5.1 Introduction](#51-introduction)
+    - [5.2 Set Up AWS](#52-set-up-aws)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
+
 
 ## 1. Introduction
 
@@ -100,7 +104,9 @@ Section videos:
 
 Video: [Project Overview](https://www.youtube.com/watch?v=lPCzCEG2yRs)
 
-I made a dedicated repository for the Udacity final project: [sparkify_customer_churn](https://github.com/mxagar/sparkify_customer_churn). I have non-committed link to that repository in the folder [`lab`](./lab/); additionally, all coding examples from this module are collected in that folder [`lab`](./lab/).
+I made a dedicated repository for the Udacity final project: [sparkify_customer_churn](https://github.com/mxagar/sparkify_customer_churn).
+
+All coding examples from this module are collected in that folder [`lab`](./lab/).
 
 Key ideas of the project:
 
@@ -268,7 +274,7 @@ Obviously, we want to use the cluster-mode; the local-mode is used to learn and 
 
 Additionally, we have:
 
-- A **master node**, which has the **driver program**, and within it sits the **SparkContext**. We always have and interact with the Spark context.
+- A **master node**, which has the **driver program**, and within the **SparkContext** sits . We always have and interact with the Spark context.
 - The Spark context talks to the **cluster manager**, which is outside from the **master node**. That manager can be, for instance Yarn and it takes care of the resource distribution.
 - The **cluster manager** handles the **worker nodes**, which are independent from the manager and are usually distributed. It requests containers with certain capacities within them depending on the workload.
 
@@ -335,27 +341,27 @@ Alternatively, if you want to create a new Python environment (recommended), you
 # Set proxy, if required
 
 # Create an environment
-conda create -n ds python=3.9 pip
-conda activate ds
-
-# Install pip-tools
-python -m pip install -U pip-tools
+conda env create -f conda.yaml
+conda activate spark
 
 # Generate pinned requirements.txt
 # PySpark is listed there
 pip-compile requirements.in
 
-# Install pinned requirements, as always
+# Install pinned requirements
+pip-sync requirements.txt
+# ... or
 python -m pip install -r requirements.txt
 
 # If required, add new dependencies to requirements.in and sync
 # i.e., update environment
 pip-compile requirements.in
 pip-sync requirements.txt
+# ... or
 python -m pip install -r requirements.txt
 
 # To delete the conda environment, if required
-conda remove --name ds --all
+conda remove --name spark --all
 ```
 
 If we are using Windows and run the cluster locally, there is an issue with the Hadoop's file system libraries, which need to be installed separately.
@@ -368,7 +374,7 @@ To resolve this issue, you need to:
    - [steveloughran/winutils](https://github.com/steveloughran/winutils)
    - or by searching for "Hadoop WinUtils" online.
 
-2. **Set up HADOOP_HOME**:
+2. **Set up `HADOOP_HOME`**:
     - Clone the selected repository, e.g., to `C:\...\git_repositories\winutils`
       - We choose the version we're going to use, e.g. `hadoop-3.3.5`
       - We check that in the `<version>\bin` folder, there is a `winutils.exe` file
@@ -376,12 +382,25 @@ To resolve this issue, you need to:
       - System Properties -> Advanced -> Environment Variables -> System Variables -> New.
     - Add `%HADOOP_HOME%\bin` to your system's `Path` environment variable so that the WinUtils binaries are accessible from anywhere.
 
+3. **Install Java and setup `JAVA_HOME`**:
+    - Download: [https://adoptium.net/download/](https://adoptium.net/download/); :warning: you need  the JDK, not the JRE!
+    - Set the `JAVA_HOME` variable to point to the `java.exe` binary, e.g., `C:\Program Files\Eclipse Adoptium\jdk-21.0.6.7-hotspot`.
+    - Add `%JAVA_HOME%\bin` to your system's `Path` environment variable.
+
+4. **If you are still getting problems, add these environment variables**:
+    ```bash
+    PYSPARK_PYTHON="C:\Users\...\AppData\Local\anaconda3\envs\spark\python.exe"
+    PYSPARK_DRIVER_PYTHON="C:\Users\...\AppData\Local\anaconda3\envs\spark\python.exe"
+    SPARK_HOME="C:\Users\...\AppData\Local\anaconda3\envs\spark\Lib\site-packages\pyspark"
+    # Path += %SPARK_HOME%\bin
+    ```
+
 ##### Run PySpark
 
 We can launch a Spark session in the Terminal locally as follows:
 
 ```bash
-conda activate ds
+conda activate spark
 pyspark
 # SparkContext available as 'sc'
 # Web UI at: http://localhost:4040/
@@ -426,7 +445,7 @@ export PYSPARK_DRIVER_PYTHON_OPTS='notebook'
 Then, we restart `pyspark` and launch jupyter from it:
 
 ```bash
-conda activate ds
+conda activate spark
 pyspark
 jupyter
 ```
@@ -434,7 +453,7 @@ jupyter
 **Alternatively**, we can use `findspark` without modifying the environment variables and without starting pyspark from outside:
 
 ```bash
-conda activate ds
+conda activate spark
 jupyter lab
 ```
 
@@ -463,6 +482,12 @@ pi = 4 * count / num_samples
 print(pi) # 3.14185392
 sc.stop()
 ```
+
+:warning: **I had issues while running the notebook on VSCode so I had to switch to the browser!** I think this can be solved, though.
+
+##### Spark UI
+
+When we start a Spark context/session, a Spark web UI is started at [http://localhost:4040/](http://localhost:4040/); if the port is taken, the next is used, e.g., `4041, 4042, ...`
 
 #### 3.1.2 Creating a Spark Session
 
@@ -548,7 +573,7 @@ flights_df_.show(2)
 
 #### 3.1.4 Common Methods and Attributes of the SQL Dataframe
 
-You can use several attributes and methods of the `flights_df` DataFrame object to explore the data. Here are some of the most important ones (ficticious column values):
+You can use several attributes and methods of the `flights_df` DataFrame object to explore the data. Here are some of the most important ones (made up column values):
 
 - `printSchema()`: This method prints the schema of the DataFrame, which shows the column names and their data types.
 
@@ -615,7 +640,7 @@ pd_counts.head()
 
 #### 3.1.7 Sparkifying: Convert a Pandas Dataframe into a Spark SQL Dataframe
 
-In previous sections, a CSV was directly loaded to Spark andd the resulting Spark SQL Dataframe registered as a temporary view to the catalog of the session.
+In previous sections, a CSV was directly loaded to Spark and the resulting Spark SQL Dataframe registered as a temporary view to the catalog of the session.
 
 Now, instead of reading CSV tables from Spark, we upload Pandas dataframes.
 
@@ -706,7 +731,7 @@ df = df.withColumn("air_time", df.arr_delay.cast("double"))
 # Rename column "air_time" -> "flight_duration"
 # BUT, the old column is still there if it has another name;
 # we can drop it using .select(), as shown below
-df = df.withColumn("flight_duration", flights.air_time)
+df = df.withColumn("flight_duration", df.air_time)
 
 # Another way to rename column names:
 # this function allows to use two column name strings
@@ -845,7 +870,7 @@ long_flights2.show(2)
 
 #### 3.2.4 Selecting Columns: SELECT - select(), selectExpr(), alias()
 
-The `select()` method is equivalent to the `SELECT` SQL operator: it can take several comma-separated column names or `Column` objects (`df.col`) and returns a table with them. In contrast, the `withColumn()` method returns the entire table. Therefore, if we want to drop unnecessary columns, we can use `select()`.
+The `select()` method is equivalent to the `SELECT` SQL operator: it can take several comma-separated column names or `Column` objects (`df.colName`) and returns a table with them. In contrast, the `withColumn()` method returns the entire table. Therefore, if we want to drop unnecessary columns, we can use `select()`.
 
 If we want to perform a more sophisticated selection, as in SQL, we can use `selectExpr()` and pass comma-separated SQL strings; if we want to change the name of the selected/transformed column, we can use `alias()`, equivalent to `AS` in SQL.
 

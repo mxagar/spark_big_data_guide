@@ -42,7 +42,7 @@ Summary points:
 
 - Big data refers to the production of large amounts of data, which is (1) **difficult to store** and (2) **process** with *single servers*.
 - Challenges of big data, the 3 Vs:
-  - Volume: we have many data and most of seems to be worthless.
+  - Volume: we have many data and most of them seems to be worthless.
   - Velocity: Data is created fast, sometimes streamed; we can get data as fast as TB/day.
   - Variety: We have data from different sources and in various formats; unlike traditional data, it is unstructured and it doesn't fit that easily to relational/SQL databases. The nice thing about Hadoop is that  we can store the data in raw format for later processing. For instance: we can store in MP3 the phone calls to later extract a *mood* indicator from the conversation.
 - Typical data candidate for big data:
@@ -60,8 +60,8 @@ Summary points:
 - Hadoop consists of two main components
     1.  Hadoop Distributed File System: HDFS - to **store** data.
         - Data is split and store in different machines.
-        - The machines forma cluster.
-        - We can in extend the cluster adding more machines as we require.
+        - The machines form a cluster.
+        - We can extend the cluster adding more machines as we require.
         - The machines don't need to be high-end!
     2.  Hadoop MapReduce - to **process** data.
         - The data is processed in each machine separately, locally.
@@ -91,7 +91,7 @@ Selected videos:
 - [Daemons of MapReduce](https://www.youtube.com/watch?v=CyRECFXtVlQ)
 - [Running a MapReduce Job](https://www.youtube.com/watch?v=WyEkdh1Qptk)
 
-When we store a file in HDFS, first we split it into blocks of equal size (except the remainder). Then, each node is stored on one node in the cluster, called **DataNodes**. The special node **NameNode** contains the metadata which contains where each block is stored.
+When we store a file in HDFS, first we split it into blocks of equal size (except the remainder). Then, each block is stored on one node in the cluster, called **DataNodes**. The special node **NameNode** contains the metadata which contains where each block is stored.
 
 Each block is copied 3x and each copy stored in a different *randomly* selected DataNode; that way, if a node fails, we have still two with the block.
 

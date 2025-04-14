@@ -18,7 +18,8 @@ No guarantees.
   - [Data Manipulation](#data-manipulation)
     - [Aggregation Functions](#aggregation-functions)
     - [Functional Programming: Pure Functions](#functional-programming-pure-functions)
-    - [More Data Wrangling with the Python API](#more-data-wrangling-with-the-python-api)
+    - [Music Service Example: Data Wrangling with the Python API](#music-service-example-data-wrangling-with-the-python-api)
+    - [Music Service Example: Data Wrangling with the SQL API](#music-service-example-data-wrangling-with-the-sql-api)
   - [Machine Learning](#machine-learning)
     - [Data Processing Pipeline](#data-processing-pipeline)
       - [Load Data](#load-data)
@@ -62,7 +63,7 @@ To resolve this issue, you need to:
 We can launch a Spark session in the Terminal locally as follows:
 
 ```bash
-conda activate ds
+conda activate spark
 pyspark
 # SparkContext available as 'sc'
 # Web UI at: http://localhost:4040/
@@ -106,7 +107,7 @@ export PYSPARK_DRIVER_PYTHON_OPTS='notebook'
 Then, we restart `pyspark` and launch jupyter from it:
 
 ```bash
-conda activate ds
+conda activate spark
 pyspark
 jupyter
 ```
@@ -114,7 +115,7 @@ jupyter
 **Alternatively**, we can use `findspark` without modifying the environment variables and without starting pyspark from outside:
 
 ```bash
-conda activate ds
+conda activate spark
 jupyter lab
 ```
 
