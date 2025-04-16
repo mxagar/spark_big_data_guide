@@ -85,6 +85,8 @@ Table of contents:
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
     - [5.1 Introduction](#51-introduction)
     - [5.2 Set Up AWS](#52-set-up-aws)
+      - [AWS CLI](#aws-cli)
+      - [Create EMR with AWS CLI](#create-emr-with-aws-cli)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
 
@@ -1301,7 +1303,7 @@ The data can be downloaded from the Udacity Spark course link. I use two local s
 - [`lab/data/mini_sparkify_event_data.json`](./lab/data/mini_sparkify_event_data.json) (+100 MB, not uploaded).
 - [`lab/data/sparkify_log_small.json`](./lab/data/sparkify_log_small.json) (4.5 MB, uploaded).
 
-However, theres a larger equivalent file (of several GBs in size) used in later sections.
+However, there's a larger equivalent file (of several GBs in size) used in later sections.
 
 Note that data analysis and wrangling can be performed in two main forms in PySpark:
 
@@ -1337,7 +1339,7 @@ The inputs from both the Python API and Spark SQL are processed by the **query o
 
 General purpose programming languages are **procedural**: they use for-loops and the like to process data. However, Spark is written in [**Scala**](https://en.wikipedia.org/wiki/Scala_(programming_language)), which is both OOP and **functional**; when using the Python API PySpark, we need to employ the **functional methods** if we want to be fast. Under the hood, the Python code uses [py4j](https://www.py4j.org/) to make calls to the Java Virtual Machine (JVM) where the Scala library is running.
 
-Functional programming uses methods like `map()`, `apply()`, `filter()`, etc. In those, we pass a function to the method, which is the applied to the entire dataset, without the need to using for-loops.
+Functional programming uses methods like `map()`, `apply()`, `filter()`, etc. In those, we pass a function to the method, which is then applied to the entire dataset, without the need to using for-loops.
 
 This **functional programming** style is very well suited for distributed systems and it is related to how MapReduce and Hadoop work:
 
@@ -1735,17 +1737,34 @@ user_log_valid.head()
 # To compute the phase, we use trick:
 # - we sort in chronologically descending order the entries of a user
 # - we compute a cummulative sum of the "downgraded" column using a window function
-# ???
 from pyspark.sql import Window
 
 # Take user entries in descending order and consider the window of preceeding values,
 # take all previous rows but no rows afterwards
-# ???
+# - partitionBy("userId"): work per user
+# - orderBy(desc("ts")): sort from most recent to oldest
+# - rangeBetween(Window.unboundedPreceding, 0): for each row, consider all rows from the top down to current row (cumulative)
 windowval = Window.partitionBy("userId")\
                   .orderBy(desc("ts"))\
-                  .rangeBetween(Window.unboundedPreceding, 0) # 
+                  .rangeBetween(Window.unboundedPreceding, 0)
 
 # Create phase column
+# withColumn("phase", Fsum("downgraded").over(windowval)): 
+# for each row (starting from the top), sum up downgraded values from the top to that point:
+# userId ts downgraded phase
+# 101 1000 0 0
+# 101 900 1 1
+# 101 800 0 1
+# 101 700 1 2
+# 101 600 0 2
+# Rows before the first downgrade have phase = 0
+# After 1st downgrade, phase = 1
+# After 2nd downgrade, phase = 2
+#
+# NOTE: we don't really need such a complicated approach, but this implementation
+# accounts for cases in which 
+# - users re-upgrade and downgrade multiple times
+# - we have complex behavior phases, e.g., trial -> paid -> free → promo -> ...
 user_log_valid = user_log_valid.withColumn("phase", Fsum("downgraded")\
                                .over(windowval))
 
@@ -1798,6 +1817,38 @@ df = df.withColumn("sex", rename_sex("sex"))
 Window functions:
 
 > Window functions are a way of combining the values of ranges of rows in a DataFrame. When defining the window we can choose how to sort and group (with the `partitionBy()` method) the rows and how wide of a window we'd like to use (described by `rangeBetween()` or `rowsBetween()`).
+
+A Window in Spark defines a subset of rows over which a function (like sum, average, etc.) is applied, without collapsing the rows like groupBy does.
+
+Think of it as a rolling calculation over a “frame” of rows that moves within a group (e.g., per user).
+
+Imagine we’re looking at Kenneth’s music activity timeline, and we want to tag each row with how many downgrade events happened after that row.
+
+So we:
+
+1.	Group by user
+2.	Sort the timeline from most recent to oldest
+3.	Add a counter that increases when we see a downgrade
+
+This helps us split Kenneth’s activity into “phases” of behavior, like “paid phase”, then “free phase”, etc.
+
+**Simpler Alternative:**
+
+If we are confident there’s at most one downgrade per user, you could just:
+
+```python
+from pyspark.sql.window import Window
+from pyspark.sql.functions import col, when, max as Fmax
+
+# Find the timestamp of the downgrade
+downgrade_ts = user_log_valid.filter(col("downgraded") == 1) \
+    .groupBy("userId") \
+    .agg(Fmax("ts").alias("downgrade_ts"))
+
+# Join it back to the full log
+user_with_phase = user_log_valid.join(downgrade_ts, on="userId", how="left") \
+    .withColumn("phase", when(col("ts") >= col("downgrade_ts"), 1).otherwise(0))
+```
 
 #### Quiz / Exercise
 
