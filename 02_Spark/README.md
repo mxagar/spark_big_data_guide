@@ -85,8 +85,13 @@ Table of contents:
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
     - [5.1 Introduction](#51-introduction)
     - [5.2 Set Up AWS](#52-set-up-aws)
+      - [Create an AWS EMR Cluster Using the Web Interface](#create-an-aws-emr-cluster-using-the-web-interface)
       - [AWS CLI](#aws-cli)
-      - [Create EMR with AWS CLI](#create-emr-with-aws-cli)
+        - [Step 1: Install AWS CLI](#step-1-install-aws-cli)
+        - [Step 2: Create an AWS IAM to use it with the CLI](#step-2-create-an-aws-iam-to-use-it-with-the-cli)
+        - [Step 3: Configure the AWS CLI](#step-3-configure-the-aws-cli)
+      - [Re-/Create an AWS EMR Cluster Using the AWS CLI](#re-create-an-aws-emr-cluster-using-the-aws-cli)
+      - [Connection to the EMR Cluster via SSH](#connection-to-the-emr-cluster-via-ssh)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
 
@@ -2252,16 +2257,20 @@ Video links:
 - [From Local Mode To Cluster Mode](https://www.youtube.com/watch?v=EeBWbABm_Qc)
 - [Setup Instructions AWS](https://www.youtube.com/watch?v=ZVdAEMGDFdo)
 
-
 ### 5.1 Introduction
 
 When we work with big data, we can't work in local mode anymore, but we need to use the cluster mode. Spark has 3 modes to work on a cluster:
 
-- Standalone: built-in cluster management; users submit jobs to a remote cluster.
+- **Standalone**: built-in cluster management; users submit jobs to a remote cluster.
 - MESOS: another 3rd party cluster management, for big teams.
 - YARN: another 3rd party cluster management, for big teams.
 
-We use AWS S3 for long term data storage and AWS EMR (Elastic MapReduce clusters) to run a Spark cluster, where data is loaded to memory; then, we connect to the cluster from our local machine and execute the analysis on the remote cluster.
+We use 
+
+- AWS S3 for long term data storage 
+- and AWS EMR (Elastic MapReduce clusters) to run a Spark cluster, where data is loaded to memory
+
+Then, we connect to the cluster from our local machine and execute the analysis on the remote cluster.
 
 ![Cloud Setup](./pics/cloud_setup.jpg)
 
@@ -2276,6 +2285,8 @@ Links:
 
 - [Setup Instructions AWS](https://www.youtube.com/watch?v=ZVdAEMGDFdo)
 - [Getting started with AWS EMR](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-gs.html#emr-getting-started-plan-and-configure)
+
+#### Create an AWS EMR Cluster Using the Web Interface
 
 Before creating an EMR instance, we need an SSH key pair:
 
@@ -2296,24 +2307,262 @@ Then, well create an EMR cluster:
         EMR on EC2: Clusters
         Create cluster
           Name: udacity-spark-cluster
-          EMR 7.0.0
-          Spark
-            Default options
+          EMR 7.8.0
+          Application bundle: Spark
+            Default options: Spark, Hadoop, etc. 
           Cluster configuration
-            m5.xlarge
-          Security and configuration
+            m5.xlarge (5 cents/hr when used)
+            Core: m5.xlarge
+            Task: we can remove them; they are to increase compute, but we don't need them
+            (Master: it should be automatically deployed)
+          Cluster scaling and provisioning
+            Core: 3 instances
+            (Master: we should automatically have 1 under the hood, which runs coordination)
+          Networking
+            A VPC should be created for us; leave defaults
+          Security and configuration and EC2 key pair
             Select created key pair: pyspark-emr-test-kp
-            
+          Identity and Access Management (IAM)
+            Amazon EMR Service role
+              Create a service role
+            EC2 instance profile for Amazon EMR
+              Create an instance profile
+          Create cluster!
 
+Notes on the EC2 instance types: `<purpose><generation>.<size>: m5.xlarge`
+
+- [Amazon EC2 Instance types](https://aws.amazon.com/ec2/instance-types/)
+- Purpose
+  - M: general purpose,
+  - C: compute (CPU) optimized
+  - R: memory optimized
+  - P: accelerated computing (GPU)
+  - ...
+- Generation: Amazon HW version
+  - There are currently 7 generations, the 5th is obviously cheaper
+  - The 5th already comes with SSDs
+- Size: overall hardware quality
+- Check always the pricing; `m5.xlarge` is about 5 cents/hr when used. Switch off cluster when not used and no costs incur.
 
 #### AWS CLI
 
-[AWS CLI reference](https://docs.aws.amazon.com/cli/latest/reference/)
+The AWS CLI interface can be used to programmatically provision and configure AWS resources. This section shows how to:
 
-#### Create EMR with AWS CLI
+- Install the AWS CLI
+- Create an AWS IAM user to use it with the CLI
+- Configure the AWS CLI
+- Run the AWS CLI
 
-TBD.
+Then, we can use the AWS CLI to, among others create an EMR cluster!
 
+See the [AWS CLI reference](https://docs.aws.amazon.com/cli/latest/reference/).
+
+##### Step 1: Install AWS CLI
+
+First: [Install or update to the latest version of the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+
+To check:
+
+```bash
+which aws  # /usr/local/bin/aws 
+aws --version  # ...
+```
+
+##### Step 2: Create an AWS IAM to use it with the CLI
+
+We create a new user and an access key for it:
+
+    Log in to AWS as root
+    Go to IAM service console
+      Users
+      Create new user
+        Details
+          User name: admin
+        Permissions
+          Attach policies directly
+            Search and select: AdministratorAccess
+        Create
+      After creating, select user and go to Create access key
+        Use case: CLI
+        Create
+
+Now, we download/copy the key id and the secret, e.g., to the `.env` file:
+
+```bash
+AWS_ACCESS_KEY_ID=***
+AWS_SECRET_ACCESS_KEY=***
+```
+
+##### Step 3: Configure the AWS CLI
+
+Now, we need to configure our AWS CLI by editing the `~/.aws/config` and  `~/.aws/credentials` files, where we define:
+
+- The profile(s): `[default]` is the standard, but we can define more and assign a different configuration to each 
+- The access key id and the secret we generated (for the profile)
+- The default region (for the profile)
+- The default output format (for the profile), e.g., json or yaml
+
+We can edit them with the AWS CLI:
+
+```bash
+# Get a list of the variables
+aws configure list
+
+# Create/update profile default - insert keys, region, format
+aws configure --profile default
+# AWS Access Key ID [***]: xxx
+# AWS Secret Access Key [***]: xxx
+# Default region name [us-east-1]: eu-central-1
+# Default output format [None]: json
+
+# Get a list of all the profiles, e.g.: default
+aws configure list-profiles
+
+# View the configuration of profile default
+aws configure list --profile default
+
+# In case, you want to change the region in a given profile
+# aws configure set <parameter> <value>  --profile <profile-name>
+# We can use `--profile <profile-name>` with any AWS command
+aws configure set region us-east-1 --profile <profile-name>
+aws configure set output json --profile default
+
+# List AWS users
+aws iam list-users
+
+# List 
+aws iam list-users --profile default
+```
+
+We can use `--profile <profile-name>` with any AWS command.
+
+More information:
+
+- [Configuring settings for the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
+- [Configuration and credential file settings in the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)
+- [Configuring environment variables for the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html)
+
+#### Re-/Create an AWS EMR Cluster Using the AWS CLI
+
+It is possible to create an EMR cluster programmatically using the AWS CLI.
+
+To that end, the command family [`aws emr create-cluster`](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/emr/create-cluster.html) needs to be used.
+
+It has many parameters; one way to get the equivalent AWS CLI command to create the cluster we have deployed via the web interface is fetching the AWS CLI command:
+
+    Log in to AWS as root
+    Go to EMR service console
+    Select cluster
+    Click on "Clone in AWS CLI"
+      We get the command needed to run in the Terminal
+
+We can save the command in a script such as [aws_emr_create_cluster.sh](./lab/04_Setup_AWS_Cluster/aws_emr_create_cluster.sh).
+
+The command/script looks something like this:
+
+```bash
+aws emr create-cluster \
+ --name "udacity-spark-cluster" \
+ --log-uri "s3://..." \
+ --release-label "emr-7.8.0" \
+ --service-role "arn:aws:iam::..." \
+ --unhealthy-node-replacement \
+ --ec2-attributes '{"InstanceProfile":...}' \
+ --tags 'for-use-with-amazon-emr-managed-policies=true' \
+ --applications Name=Hadoop Name=Hive Name=JupyterEnterpriseGateway Name=Livy Name=Spark \
+ --instance-groups '[{"InstanceCount":3,"InstanceGroupType":"CORE","Name":"Core","InstanceType":"m5.xlarge","EbsConfiguration":{"EbsBlockDeviceConfigs":[{"VolumeSpecification":{"VolumeType":"gp2","SizeInGB":32},"VolumesPerInstance":2}]}},{"InstanceCount":1,"InstanceGroupType":"MASTER","Name":"Primary","InstanceType":"m5.xlarge","EbsConfiguration":{"EbsBlockDeviceConfigs":[{"VolumeSpecification":{"VolumeType":"gp2","SizeInGB":32},"VolumesPerInstance":2}]}}]' \
+ --scale-down-behavior "TERMINATE_AT_TASK_COMPLETION" \
+ --auto-termination-policy '{"IdleTimeout":3600}' \
+ --region "eu-central-1"
+```
+
+Note the arguments we pass:
+
+- `--name`: the name; we can reuse it.
+- `--log-uri`: S3 location to store your EMR logs in.
+- `--release-label`: EMR version.
+- `--ec2-attributes`: EC2 configuration, including security groups, keys, etc.
+- `--instance-groups`: the definition of the nodes on EC2, i.e., HW & Co.
+- `--auto-termination-policy`: if 3600 seconds idle, the cluster auto-terminates
+
+An option to getting the command is to store a JSON of a cluster status and use it (not tested).
+
+```bash
+# List EMR clusters and their status: select cluster id
+aws emr list-clusters
+
+# Get a JSON of cluster j-xxx
+aws emr describe-cluster --cluster-id j-xxx > cluster-config.json
+
+# Use the JSON to restart a new cluster
+aws emr create-cluster --cli-input-json cluster-config.json
+```
+
+Finally, note that for every terminated/running cluster, we can select it in the web UI and click on `Clone`, which starts an identical cluster.
+
+#### Connection to the EMR Cluster via SSH
+
+To be able to connect via SSH to the cluster, we need to enable the TCP port 22 (SSH) in the inbound rules of the security group:
+
+    Log in to AWS as root
+    Go to EMR service console
+    Select cluster
+    Network and security: EC2 security groups
+      Primary node - EMR managed security group
+      Open it: sg-xxx ElasticMapReduce-master
+        Inbound rules: Edit
+        Add rule
+          Type: Custom TCP / SSH
+          Port: 22
+          Source: Custom - My IP: our IP should be discovered
+
+We can do that via the AWS CLI, too:
+
+```bash
+# List EMR clusters and their status and select the cluster id: j-xxx
+aws emr list-clusters
+
+# Get the security group of a cluster: sg-xxx
+aws emr describe-cluster --cluster-id j-xxx \
+  --query "Cluster.Ec2InstanceAttributes.EmrManagedMasterSecurityGroup" \
+  --output text
+
+# Get the settings of our security group
+aws ec2 describe-security-groups --group-ids sg-xxx --query 'SecurityGroups[*].IpPermissions[?FromPort==`22`]'
+
+# Check the pulic DNS of the master node
+aws emr describe-cluster \
+  --cluster-id j-xxx \
+  --query "Cluster.MasterPublicDnsName" \
+  --output text
+
+# Get my local IP
+curl https://checkip.amazonaws.com
+
+# Enable incoming SSH comms
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-xxx \
+  --protocol tcp \
+  --port 22 \
+  --cidr <my-ip>/32
+```
+
+Finally, to connect via SSH:
+
+```bash
+# List EMR clusters and their status and select the cluster id: j-xxx
+aws emr list-clusters
+
+# Get the public DNS of the cluster
+aws emr describe-cluster --cluster-id j-xxx --query "Cluster.MasterPublicDnsName" --output text
+
+# If we forgot which key-pair file we need, we can check it with the following
+aws emr describe-cluster --cluster-id j-xxx --query "Cluster.Ec2InstanceAttributes.Ec2KeyName"
+
+# Connect via SSH
+ssh -i /path/to/your-key.pem hadoop@ec2-xx-xxx-xxx-xxx.eu-central-1.compute.amazonaws.com
+ssh -i pyspark-emr-test-kp.pem hadoop@ec2-63-177-88-189.eu-central-1.compute.amazonaws.com
+```
 
 ## 6. Debugging and Optimization
 
