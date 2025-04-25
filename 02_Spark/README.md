@@ -2561,7 +2561,6 @@ aws emr describe-cluster --cluster-id j-xxx --query "Cluster.Ec2InstanceAttribut
 
 # Connect via SSH
 ssh -i /path/to/your-key.pem hadoop@ec2-xx-xxx-xxx-xxx.eu-central-1.compute.amazonaws.com
-ssh -i pyspark-emr-test-kp.pem hadoop@ec2-63-177-88-189.eu-central-1.compute.amazonaws.com
 ```
 
 ## 6. Debugging and Optimization
