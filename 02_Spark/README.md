@@ -94,6 +94,8 @@ Table of contents:
       - [Connection to the EMR Cluster via SSH](#connection-to-the-emr-cluster-via-ssh)
       - [Launch a Jupyter Notebook on EMR and Connect to It from Local Browser](#launch-a-jupyter-notebook-on-emr-and-connect-to-it-from-local-browser)
     - [5.2 \[NEW - Alternative\] Set Up Docker Cluster](#52-new---alternative-set-up-docker-cluster)
+      - [Create an S3 Bucket and Upload Dataset](#create-an-s3-bucket-and-upload-dataset)
+      - [Access S3 from the Cluster](#access-s3-from-the-cluster)
     - [5.3 Submitting Python Scripts to the AWS Cluster](#53-submitting-python-scripts-to-the-aws-cluster)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
@@ -2618,8 +2620,12 @@ docker pull jupyter/pyspark-notebook
 # Start cotainer:
 # - port-forward to local port 8888
 # - mount volume on local directory
-docker run -it --name spark-local -p 8888:8888 -v "$PWD":/home/jovyan/work jupyter/pyspark-notebook
-# Get token
+# - mount also the credentials of AWS
+docker run -it --name spark-local \
+  -p 8888:8888 \
+  -v "$PWD":/home/jovyan/work \
+  -v ~/.aws:/home/jovyan/.aws \
+  jupyter/pyspark-notebook# Get token
 # http://127.0.0.1:8888/lab?token=xxx
 
 # Start browser at
@@ -2631,6 +2637,9 @@ docker run -it --name spark-local -p 8888:8888 -v "$PWD":/home/jovyan/work jupyt
 
 # To check that the container is running
 docker ps
+
+# To stop and rm
+docker stop spark-local && docker rm spark-local
 ```
 
 Code to check that the cluster is running, `test_spark.ipynb`:
@@ -2668,6 +2677,67 @@ Then, we put the script inside the mounted volume and submit it using the comman
 # In a new Terminal
 docker exec -it spark-local spark-submit /home/jovyan/work/test_spark.py
 ```
+
+#### Create an S3 Bucket and Upload Dataset
+
+1. Sign in to the AWS Management Console and navigate to the S3 service.
+2. Create a new bucket:
+   - Click on "Create bucket".
+   - Provide a unique Bucket name (e.g., `udacity-spark-music-bucket`).
+   - Choose the desired AWS Region.
+   - Uncheck the option "Block all public access" under the "Object Ownership" section. Confirm the warning that appears.
+   - Click "Create bucket".
+3. Set Bucket Policy to Allow Public Read Access:
+   - After creating the bucket, go to the bucket's Permissions tab.
+   - Click on "Bucket Policy" and add the following policy, replacing bucket name if necessary:
+
+```json
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "PublicReadGetObject",
+          "Effect": "Allow",
+          "Principal": "*",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::udacity-spark-music-bucket/*"
+        }
+      ]
+    }
+```
+
+Now, we can upload the dataset, either manually via the web UI (click on "Upload") or with the `aws-cli`:
+
+```bash
+# Check version
+aws --version
+
+# If no profile configuration done, we'll be prompted to enter the keys & co.
+aws configure
+
+# Upload CSV
+aws s3 cp cities.csv s3://udacity-spark-music-bucket/cities.csv
+
+# Optional: make it available to everyone
+# in https://udacity-spark-music-bucket.s3.amazonaws.com/cities.csv
+aws s3api put-bucket-policy \
+  --bucket udacity-spark-music-bucket \
+  --policy '{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AllowPublicReadAccess",
+        "Effect": "Allow",
+        "Principal": "*",
+        "Action": "s3:GetObject",
+        "Resource": "arn:aws:s3:::udacity-spark-music-bucket/*"
+      }
+    ]
+  }'
+```
+
+#### Access S3 from the Cluster
+
 
 
 ### 5.3 Submitting Python Scripts to the AWS Cluster
