@@ -84,7 +84,7 @@ Table of contents:
       - [Quiz / Exercise](#quiz--exercise-1)
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
     - [5.1 Introduction](#51-introduction)
-    - [5.2 \[OLD\] Set Up AWS](#52-old-set-up-aws)
+    - [5.2 \[OLD - Not working\] Set Up AWS](#52-old---not-working-set-up-aws)
       - [Create an AWS EMR Cluster Using the Web Interface](#create-an-aws-emr-cluster-using-the-web-interface)
       - [AWS CLI](#aws-cli)
         - [Step 1: Install AWS CLI](#step-1-install-aws-cli)
@@ -93,7 +93,7 @@ Table of contents:
       - [Re-/Create an AWS EMR Cluster Using the AWS CLI](#re-create-an-aws-emr-cluster-using-the-aws-cli)
       - [Connection to the EMR Cluster via SSH](#connection-to-the-emr-cluster-via-ssh)
       - [Launch a Jupyter Notebook on EMR and Connect to It from Local Browser](#launch-a-jupyter-notebook-on-emr-and-connect-to-it-from-local-browser)
-    - [5.2 \[NEW\] Set Up AWS](#52-new-set-up-aws)
+    - [5.2 \[NEW - Alternative\] Set Up Docker Cluster](#52-new---alternative-set-up-docker-cluster)
     - [5.3 Submitting Python Scripts to the AWS Cluster](#53-submitting-python-scripts-to-the-aws-cluster)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
@@ -2277,7 +2277,7 @@ Then, we connect to the cluster from our local machine and execute the analysis 
 
 ![Cloud Setup](./pics/cloud_setup.jpg)
 
-### 5.2 [OLD] Set Up AWS
+### 5.2 [OLD - Not working] Set Up AWS
 
 Recall that Big Data started originally with Hadoop: HDFS (file system) + MapReduce (Computation Algorithm).
 Spark replaces MapReduce, but it doesn't have a file system, so it needs to use a 3rd party distributed file system, e.g., HDFS or even AWS S3.
@@ -2288,6 +2288,8 @@ Links:
 
 - [Setup Instructions AWS](https://www.youtube.com/watch?v=ZVdAEMGDFdo)
 - [Getting started with AWS EMR](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-gs.html#emr-getting-started-plan-and-configure)
+
+:warning: **IMPORTANT NOTE**: Even though the subsections here are of interest, I did not achieve to run an EMR cluster properly following the instructions. Instead, look at the next section: [Set Up Docker Cluster](#52-new---alternative-set-up-docker-cluster).
 
 #### Create an AWS EMR Cluster Using the Web Interface
 
@@ -2607,8 +2609,65 @@ http://localhost:8888
 
 In my case, I could open the Jupyter notebook, but then running any simple PySpark code didn't work neither in a regular Python kernel not in a PySpark kernel.
 
-### 5.2 [NEW] Set Up AWS
+### 5.2 [NEW - Alternative] Set Up Docker Cluster
 
+```bash
+# Pull docker image
+docker pull jupyter/pyspark-notebook
+
+# Start cotainer:
+# - port-forward to local port 8888
+# - mount volume on local directory
+docker run -it --name spark-local -p 8888:8888 -v "$PWD":/home/jovyan/work jupyter/pyspark-notebook
+# Get token
+# http://127.0.0.1:8888/lab?token=xxx
+
+# Start browser at
+# http://localhost:8888
+# Enter token
+# We should see the mounted volume work/ in there
+# We go into work/
+# and create new notebook with the example code below: test_spark.ipynb
+
+# To check that the container is running
+docker ps
+```
+
+Code to check that the cluster is running, `test_spark.ipynb`:
+
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("HelloLocalSpark").getOrCreate()
+
+df = spark.range(10)
+df.show()
+
+spark.stop()
+```
+
+We can also submit scripts to be run on the cluster; in that case, we need to wrap the script code in a `__main__`:
+
+```python
+from pyspark.sql import SparkSession
+
+def main():
+    spark = SparkSession.builder.appName("HelloLocalSpark").getOrCreate()
+    df = spark.range(10)
+    df.show()
+    spark.stop()
+
+if __name__ == "__main__":
+    main()
+```
+
+Then, we put the script inside the mounted volume and submit it using the command `spark-submit` present in any cluster:
+
+
+```bash
+# In a new Terminal
+docker exec -it spark-local spark-submit /home/jovyan/work/test_spark.py
+```
 
 
 ### 5.3 Submitting Python Scripts to the AWS Cluster
