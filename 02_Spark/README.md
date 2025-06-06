@@ -84,7 +84,7 @@ Table of contents:
       - [Quiz / Exercise](#quiz--exercise-1)
   - [5. Setting up Spark Clusters with AWS](#5-setting-up-spark-clusters-with-aws)
     - [5.1 Introduction](#51-introduction)
-    - [5.2 Set Up AWS](#52-set-up-aws)
+    - [5.2 \[OLD\] Set Up AWS](#52-old-set-up-aws)
       - [Create an AWS EMR Cluster Using the Web Interface](#create-an-aws-emr-cluster-using-the-web-interface)
       - [AWS CLI](#aws-cli)
         - [Step 1: Install AWS CLI](#step-1-install-aws-cli)
@@ -92,6 +92,9 @@ Table of contents:
         - [Step 3: Configure the AWS CLI](#step-3-configure-the-aws-cli)
       - [Re-/Create an AWS EMR Cluster Using the AWS CLI](#re-create-an-aws-emr-cluster-using-the-aws-cli)
       - [Connection to the EMR Cluster via SSH](#connection-to-the-emr-cluster-via-ssh)
+      - [Launch a Jupyter Notebook on EMR and Connect to It from Local Browser](#launch-a-jupyter-notebook-on-emr-and-connect-to-it-from-local-browser)
+    - [5.2 \[NEW\] Set Up AWS](#52-new-set-up-aws)
+    - [5.3 Submitting Python Scripts to the AWS Cluster](#53-submitting-python-scripts-to-the-aws-cluster)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
 
@@ -2274,7 +2277,7 @@ Then, we connect to the cluster from our local machine and execute the analysis 
 
 ![Cloud Setup](./pics/cloud_setup.jpg)
 
-### 5.2 Set Up AWS
+### 5.2 [OLD] Set Up AWS
 
 Recall that Big Data started originally with Hadoop: HDFS (file system) + MapReduce (Computation Algorithm).
 Spark replaces MapReduce, but it doesn't have a file system, so it needs to use a 3rd party distributed file system, e.g., HDFS or even AWS S3.
@@ -2292,7 +2295,7 @@ Before creating an EMR instance, we need an SSH key pair:
 
     Log in to AWS as root
     Go to EC2 Service console
-        Network & securty > Key Pairs
+        Network & security > Key Pairs
           Create key pais
           Name: pyspark-emr-test-kp
           Download the file pyspark-emr-test-kp.pem
@@ -2300,7 +2303,7 @@ Before creating an EMR instance, we need an SSH key pair:
 
 The downloaded key is one part of the pair; the other is in the AWS cloud.
 
-Then, well create an EMR cluster:
+Then, we'll create an EMR cluster:
 
     Log in to AWS as root
     Go to EMR service console
@@ -2343,6 +2346,11 @@ Notes on the EC2 instance types: `<purpose><generation>.<size>: m5.xlarge`
   - The 5th already comes with SSDs
 - Size: overall hardware quality
 - Check always the pricing; `m5.xlarge` is about 5 cents/hr when used. Switch off cluster when not used and no costs incur.
+
+**IMPORTANT NOTES**:
+
+- A running cluster incurs in costs, so we should terminate them if not used; in fact, the default idle time before automatic termination is usually set to 1h.
+- Even though we have terminated a cluster, we can see it in the Clusters tab and **we can clone previous clusters**, i.e., we get the same configuration.
 
 #### AWS CLI
 
@@ -2473,6 +2481,7 @@ aws emr create-cluster \
  --instance-groups '[{"InstanceCount":3,"InstanceGroupType":"CORE","Name":"Core","InstanceType":"m5.xlarge","EbsConfiguration":{"EbsBlockDeviceConfigs":[{"VolumeSpecification":{"VolumeType":"gp2","SizeInGB":32},"VolumesPerInstance":2}]}},{"InstanceCount":1,"InstanceGroupType":"MASTER","Name":"Primary","InstanceType":"m5.xlarge","EbsConfiguration":{"EbsBlockDeviceConfigs":[{"VolumeSpecification":{"VolumeType":"gp2","SizeInGB":32},"VolumesPerInstance":2}]}}]' \
  --scale-down-behavior "TERMINATE_AT_TASK_COMPLETION" \
  --auto-termination-policy '{"IdleTimeout":3600}' \
+ --visible-to-all-users \
  --region "eu-central-1"
 ```
 
@@ -2483,7 +2492,7 @@ Note the arguments we pass:
 - `--release-label`: EMR version.
 - `--ec2-attributes`: EC2 configuration, including security groups, keys, etc.
 - `--instance-groups`: the definition of the nodes on EC2, i.e., HW & Co.
-- `--auto-termination-policy`: if 3600 seconds idle, the cluster auto-terminates
+- `--auto-termination-policy`: if 3600 seconds idle (1h), the cluster auto-terminates
 
 An option to getting the command is to store a JSON of a cluster status and use it (not tested).
 
@@ -2561,7 +2570,50 @@ aws emr describe-cluster --cluster-id j-xxx --query "Cluster.Ec2InstanceAttribut
 
 # Connect via SSH
 ssh -i /path/to/your-key.pem hadoop@ec2-xx-xxx-xxx-xxx.eu-central-1.compute.amazonaws.com
+# We should see a greeting from EMR
+
+# We can check that Spark is working with the following; 
+# We should see the prompt scala>
+# Press Ctrl+D to exit.
+spark-shell
 ```
+
+#### Launch a Jupyter Notebook on EMR and Connect to It from Local Browser
+
+In the Terminal, logged in to the cluster, we can launch Jupyter and apply port forwarding to it.
+
+```bash
+# EMR Terminal on Mac: Start Jupyter without GUI
+jupyter notebook --no-browser --port=8888
+# Write down the token: http://localhost:8888/tree?token=xxx
+
+# If no Jupyter installed, install it
+python3 -m ensurepip --upgrade
+python3 -m pip install --upgrade pip setuptools
+pip3 install notebook
+export PATH=$HOME/.local/bin:$PATH
+# Then, try to start Jupyter again
+sudo chmod +x /mnt/notebook-env/bin/kernel_launcher.sh
+sudo chmod +x /mnt/notebook-env/bin/start_kernel_as_emr_notebook.sh
+jupyter notebook --no-browser --port=8888
+# Write down the token: http://localhost:8888/tree?token=xxx
+
+# In a separate Terminal tab, locally, port-forward to EMR port 8888
+ssh -i pyspark-emr-test-kp.pem -N -L 8888:localhost:8888 hadoop@ec2-xx-xxx-xxx-xxx.eu-central-1.compute.amazonaws.com
+
+# Open browser locally
+http://localhost:8888
+```
+
+In my case, I could open the Jupyter notebook, but then running any simple PySpark code didn't work neither in a regular Python kernel not in a PySpark kernel.
+
+### 5.2 [NEW] Set Up AWS
+
+
+
+### 5.3 Submitting Python Scripts to the AWS Cluster
+
+
 
 ## 6. Debugging and Optimization
 
