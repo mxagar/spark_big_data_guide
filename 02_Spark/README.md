@@ -96,7 +96,8 @@ Table of contents:
     - [5.2 \[NEW - Alternative\] Set Up Docker Cluster](#52-new---alternative-set-up-docker-cluster)
       - [Create an S3 Bucket and Upload Dataset](#create-an-s3-bucket-and-upload-dataset)
       - [Access S3 from the Cluster](#access-s3-from-the-cluster)
-    - [5.3 Submitting Python Scripts to the AWS Cluster](#53-submitting-python-scripts-to-the-aws-cluster)
+    - [5.3 Submitting Python Scripts to the Cluster](#53-submitting-python-scripts-to-the-cluster)
+    - [5.4 Reading and Writing Data to S3 \& HDFS](#54-reading-and-writing-data-to-s3--hdfs)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
 
@@ -2618,14 +2619,20 @@ In my case, I could open the Jupyter notebook, but then running any simple PySpa
 docker pull jupyter/pyspark-notebook
 
 # Start cotainer:
-# - port-forward to local port 8888
+# - port-forward to local port 8888, where Jupyter will run
+# - port-forward to local port 4040, where Spark UI will run
 # - mount volume on local directory
 # - mount also the credentials of AWS
+# - add extra env variables so that PySpark can access AWS S3
 docker run -it --name spark-local \
   -p 8888:8888 \
+  -p 4040:4040 \
   -v "$PWD":/home/jovyan/work \
   -v ~/.aws:/home/jovyan/.aws \
-  jupyter/pyspark-notebook# Get token
+  -e PYSPARK_SUBMIT_ARGS="--packages org.apache.hadoop:hadoop-aws:3.3.2,com.amazonaws:aws-java-sdk-bundle:1.11.1026 pyspark-shell" \
+  jupyter/pyspark-notebook
+
+# Get token
 # http://127.0.0.1:8888/lab?token=xxx
 
 # Start browser at
@@ -2635,11 +2642,19 @@ docker run -it --name spark-local \
 # We go into work/
 # and create new notebook with the example code below: test_spark.ipynb
 
+# To check Spark UI, go to
+# http://localhost:4040
+
 # To check that the container is running
 docker ps
 
 # To stop and rm
 docker stop spark-local && docker rm spark-local
+
+# To check memory usage, e.g., free memory
+docker exec spark-local free -h
+# or
+docker stats spark-local
 ```
 
 Code to check that the cluster is running, `test_spark.ipynb`:
@@ -2655,7 +2670,7 @@ df.show()
 spark.stop()
 ```
 
-We can also submit scripts to be run on the cluster; in that case, we need to wrap the script code in a `__main__`:
+We can also **submit scripts** to be run on the cluster; in that case, we need to wrap the script code in a `__main__`:
 
 ```python
 from pyspark.sql import SparkSession
@@ -2671,7 +2686,6 @@ if __name__ == "__main__":
 ```
 
 Then, we put the script inside the mounted volume and submit it using the command `spark-submit` present in any cluster:
-
 
 ```bash
 # In a new Terminal
@@ -2738,9 +2752,82 @@ aws s3api put-bucket-policy \
 
 #### Access S3 from the Cluster
 
+Once we have started our docker container with the mounted AWS credentials, we can access S3 from the cluster using PySpark:
 
+- We need to set the Hadoop configuration to use S3A (S3 access) and the AWS credentials provider.
+- We can then read and write data to S3 using PySpark and using this URI/URL: `s3a://<bucket-name>/<path>`.
 
-### 5.3 Submitting Python Scripts to the AWS Cluster
+Notes:
+
+- The `s3a://` protocol is used for accessing S3 in Spark, which is different from the `s3://` protocol used in some other contexts.
+- The entire dataset is not loaded into memory, but only the parts we need are processed in parallel across the cluster; however, if we run `df.collect()` or `df.toPandas()`, the entire dataset is loaded into memory, which can lead to memory issues for large datasets.
+
+```python
+from pyspark.sql import SparkSession
+
+# Initialize SparkSession with S3 support
+spark = SparkSession.builder \
+    .appName("CitiesDataAnalysis") \
+    .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+    .config("spark.hadoop.fs.s3a.aws.credentials.provider", "com.amazonaws.auth.DefaultAWSCredentialsProviderChain") \
+    .getOrCreate()
+
+# Define the S3 path to your CSV file
+s3_path = "s3a://udacity-spark-music-askdjb/cities.csv"
+
+# Read the CSV file into a DataFrame
+df = spark.read.option("header", "true").csv(s3_path)
+
+# Show the first few rows
+df.show()
+
+# Perform additional Spark operations as needed
+# For example, count the number of cities per country
+df.groupBy("country").count().show()
+
+# Stop the SparkSession
+spark.stop()
+```
+
+### 5.3 Submitting Python Scripts to the Cluster
+
+We can **submit scripts** to be run on the cluster; in that case, we need to wrap the script code in a `__main__`:
+
+```python
+from pyspark.sql import SparkSession
+
+def main():
+    spark = SparkSession.builder.appName("HelloLocalSpark").getOrCreate()
+    df = spark.range(10)
+    df.show()
+    spark.stop()
+
+if __name__ == "__main__":
+    main()
+```
+
+Then, we put the script inside the mounted volume and submit it using the command `spark-submit` present in any cluster:
+
+```bash
+# Log in to the cluster via SSH
+ssh -i /path/to/your-key.pem hadoop@ec2-xx-xxx-xxx-xxx.eu-central-1.compute.amazonaws.com
+
+# Check that spark-submit is available
+# Usually, it will be in /usr/bin
+which spark-submit
+
+# Submit the application/job
+spark-submit /home/jovyan/work/test_spark.py
+
+# Alternative: If we are using docker, in a new Terminal
+docker exec -it spark-local spark-submit /home/jovyan/work/test_spark.py
+```
+
+### 5.4 Reading and Writing Data to S3 & HDFS
+
+We can use S3 or HDFS to store and retrieve data. The main difference is that S3 is a cloud storage service, while HDFS is a distributed file system typically used in Hadoop clusters.
+
+See [Access S3 from the Cluster](#access-s3-from-the-cluster) for how to read and write data to S3.
 
 
 
