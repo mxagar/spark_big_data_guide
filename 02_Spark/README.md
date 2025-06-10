@@ -2829,7 +2829,50 @@ We can use S3 or HDFS to store and retrieve data. The main difference is that S3
 
 See [Access S3 from the Cluster](#access-s3-from-the-cluster) for how to read and write data to S3.
 
+Key ideas:
 
+- HDFS is a distributed file system that is tightly integrated with Hadoop and Spark, while S3 is a cloud storage service that can be accessed from anywhere.
+- S3 is typically used for long-term storage of data, while HDFS is used for short-term storage of data that is being processed by Spark.
+- Using S3 means we don't need to manage the underlying infrastructure, while using HDFS means we have more control over the data and can optimize performance for specific workloads.
+- S3 can store any type of data, while HDFS is optimized for large files and structured data, commonly in `parquet` or `avro` format.
+
+We saw how to upload data to S3:
+
+```bash
+# Upload a file to S3
+aws s3 cp /path/to/local/file.csv s3://your-bucket-name/path/to/file.csv
+
+# Upload a directory to S3
+aws s3 cp /path/to/local/directory s3://your-bucket-name/path/to/directory --recursive
+```
+
+If we want to use HDFS, we need to set up a Hadoop cluster, which can be done using AWS EMR or manually on EC2 instances. If we run docker, we can use the Hadoop image to run HDFS commands. But this needs to be set up first, e.g., using `docker-compose`.
+
+Then, reading and writing data to HDFS is easy via the `hdfs` CLI tool:
+
+```bash
+# Log in to the cluster via SSH
+# ...
+
+# Create a directory in HDFS
+hdfs dfs -mkdir -p /user/sparkify_data
+
+# List files in HDFS directory
+hdfs dfs -ls /user/sparkify_data
+
+# Upload a file to HDFS
+hdfs dfs -put cities.csv /user/sparkify_data
+```
+
+Then, we can read and write data to HDFS using PySpark:
+
+```python
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName("HDFSDataAnalysis").getOrCreate()
+
+# Read data from HDFS
+df = spark.read.option("header", "true").csv("hdfs:///user/sparkify_data/cities.csv")
+```
 
 ## 6. Debugging and Optimization
 
