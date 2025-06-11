@@ -99,6 +99,7 @@ Table of contents:
     - [5.3 Submitting Python Scripts to the Cluster](#53-submitting-python-scripts-to-the-cluster)
     - [5.4 Reading and Writing Data to S3 \& HDFS](#54-reading-and-writing-data-to-s3--hdfs)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
+    - [Debugging](#debugging)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
 
 
@@ -2634,6 +2635,8 @@ docker run -it --name spark-local \
   jupyter/pyspark-notebook
 
 # Windows Powershell
+# HOWEVER: If you are working behind corporate proxies,
+# you need to do more than setting the environment variables...
 docker run -it --name spark-local `
   -p 8888:8888 `
   -p 4040:4040 `
@@ -2889,6 +2892,43 @@ df = spark.read.option("header", "true").csv("hdfs:///user/sparkify_data/cities.
 ```
 
 ## 6. Debugging and Optimization
+
+Debugging in distributed systems is harder than in local systems.
+
+Syntax errors: [Code Errors](https://www.youtube.com/watch?v=UfG2TGlIDPk)
+
+- Due to lazy evaluation, syntax errors are not detected until the code is executed.
+- We often get errors in the Java/Scala code, not in the Python code.
+- If we use a function that doesn't exist (e.g., miss-spelled): `AttributeError`.
+- If we use a column name which doesn't exist: `AnalysisException`
+- If the result is too big (to fit in memory): `PyJava... OutOfMemoryError`
+  - Column-names are case sensitive, unless we set them not to be with `spark.conf.set("spark.sql.caseSensitive", "false")`
+- If functions are used on the wrong data: `PySparkTypeError`
+- If we forget closing a parentheses: `SyntaxError - unexpected EOF parsing`
+
+Data errors: [Data Errors](https://www.youtube.com/watch?v=cWCqTRbqQTc)
+
+- We can have malformed or missing data items.
+
+Videos:
+
+- [Code Errors](https://www.youtube.com/watch?v=UfG2TGlIDPk)
+- [Data Errors](https://www.youtube.com/watch?v=cWCqTRbqQTc)
+
+Notebook: [`05_Debugging/debugging_spark.ipynb`](./lab/05_Debugging/debugging_spark.ipynb).
+
+### Debugging
+
+Debugging in PySpark cannot be done by using a regular Python debugger or printing in given places. That's because we have access to the driver node, but the workers are the ones which execute the code, and they are not accessible for us a s users.
+
+![Debugging](./pics/debugging.png)
+
+Instead, **accumulators** are used; accumulators are like global variables that can be updated by the workers and read by the driver.
+
+Videos:
+
+[How to Use Accumulators](https://www.youtube.com/watch?v=oV1PmKf9Spc)
+
 
 
 ## 7. Machine Learning with PySpark
