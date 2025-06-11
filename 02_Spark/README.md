@@ -2629,7 +2629,20 @@ docker run -it --name spark-local \
   -p 4040:4040 \
   -v "$PWD":/home/jovyan/work \
   -v ~/.aws:/home/jovyan/.aws \
+  -e AWS_PROFILE=default \
   -e PYSPARK_SUBMIT_ARGS="--packages org.apache.hadoop:hadoop-aws:3.3.2,com.amazonaws:aws-java-sdk-bundle:1.11.1026 pyspark-shell" \
+  jupyter/pyspark-notebook
+
+# Windows Powershell
+docker run -it --name spark-local `
+  -p 8888:8888 `
+  -p 4040:4040 `
+  -e HTTP_PROXY=$env:HTTP_PROXY `
+  -e HTTPS_PROXY=$env:HTTPS_PROXY `
+  -v ${PWD}:/home/jovyan/work `
+  -v ${HOME}\.aws:/home/jovyan/.aws `
+  -e AWS_PROFILE=default `
+  -e PYSPARK_SUBMIT_ARGS="--packages org.apache.hadoop:hadoop-aws:3.3.2,com.amazonaws:aws-java-sdk-bundle:1.11.1026 pyspark-shell" `
   jupyter/pyspark-notebook
 
 # Get token
@@ -2649,7 +2662,8 @@ docker run -it --name spark-local \
 docker ps
 
 # To stop and rm
-docker stop spark-local && docker rm spark-local
+docker stop spark-local
+docker rm spark-local
 
 # To check memory usage, e.g., free memory
 docker exec spark-local free -h
