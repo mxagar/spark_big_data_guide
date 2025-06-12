@@ -100,6 +100,7 @@ Table of contents:
     - [5.4 Reading and Writing Data to S3 \& HDFS](#54-reading-and-writing-data-to-s3--hdfs)
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
     - [Debugging](#debugging)
+    - [Spark Web UI](#spark-web-ui)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
 
 
@@ -417,7 +418,7 @@ We can launch a Spark session in the Terminal locally as follows:
 conda activate spark
 pyspark
 # SparkContext available as 'sc'
-# Web UI at: http://localhost:4040/
+# Web UI at: http://localhost:4040/ or http://localhost:3000/
 # SparkSession available as 'spark'
 
 sc # <SparkContext master=local[*] appName=PySparkShell>
@@ -501,7 +502,7 @@ sc.stop()
 
 ##### Spark UI
 
-When we start a Spark context/session, a Spark web UI is started at [http://localhost:4040/](http://localhost:4040/); if the port is taken, the next is used, e.g., `4041, 4042, ...`
+When we start a Spark context/session, a Spark web UI is started at [http://localhost:4040/](http://localhost:4040/); if the port is taken, the next is used, e.g., `4041, 4042, ...` Another option is to use the port `3000`, which is the default in Jupyter notebooks.
 
 #### 3.1.2 Creating a Spark Session
 
@@ -1373,6 +1374,17 @@ In Spark, every node makes a copy of the data being processed, so the data is *i
 The data is not copied for each of the sub-functions; instead, we perform **lazy evaluation**: all sub-functions are chained in **Direct Acyclic Graphs (DAGs)** and they are not run on the data until it is really necessary. The combinations of sub-functions or chained steps before touching any data are called **stages**.
 
 This is similar to baking bread: we collect all necessary stuff (ingredients, tools, etc.) and prepare them properly before even starting to make the dough.
+
+Therefore, we can say that we have basically two types of functions in Spark:
+
+- Transformations: not evaluated until an action is called
+- Actions: they trigger the evaluation of the transformations and return a result
+
+```python
+df = spark.read.load("some csv file")  # Transformation, not evaluated yet
+df1 = df.select("some column").filter("some condition")  # Transformation, not evaluated yet
+df1.write("to path")  # Action, triggers evaluation
+```
 
 #### Example Notebook: Functional Programming
 
@@ -2621,13 +2633,14 @@ docker pull jupyter/pyspark-notebook
 
 # Start cotainer:
 # - port-forward to local port 8888, where Jupyter will run
-# - port-forward to local port 4040, where Spark UI will run
+# - port-forward to local port 4040 and/or 3000, where Spark UI will run
 # - mount volume on local directory
 # - mount also the credentials of AWS
 # - add extra env variables so that PySpark can access AWS S3
 docker run -it --name spark-local \
   -p 8888:8888 \
   -p 4040:4040 \
+  -p 3000:3000 \
   -v "$PWD":/home/jovyan/work \
   -v ~/.aws:/home/jovyan/.aws \
   -e AWS_PROFILE=default \
@@ -2640,6 +2653,7 @@ docker run -it --name spark-local \
 docker run -it --name spark-local `
   -p 8888:8888 `
   -p 4040:4040 `
+  -p 3000:3000 `
   -e HTTP_PROXY=$env:HTTP_PROXY `
   -e HTTPS_PROXY=$env:HTTPS_PROXY `
   -v ${PWD}:/home/jovyan/work `
@@ -2659,7 +2673,7 @@ docker run -it --name spark-local `
 # and create new notebook with the example code below: test_spark.ipynb
 
 # To check Spark UI, go to
-# http://localhost:4040
+# http://localhost:4040 or http://localhost:3000
 
 # To check that the container is running
 docker ps
@@ -2672,6 +2686,9 @@ docker rm spark-local
 docker exec spark-local free -h
 # or
 docker stats spark-local
+
+# To enter the container, e.g., to check the logs
+docker exec -it spark-local bash
 ```
 
 Code to check that the cluster is running, `test_spark.ipynb`:
@@ -2925,11 +2942,82 @@ Debugging in PySpark cannot be done by using a regular Python debugger or printi
 
 Instead, **accumulators** are used; accumulators are like global variables that can be updated by the workers and read by the driver.
 
+```python
+sc = spark.sparkContext
+
+# Create an accumulator (initial value = 0)
+acc = sc.accumulator(0)
+
+rdd = sc.parallelize([1, 2, 3, 4, 5])
+
+def process(x):
+    global acc
+    if x % 2 == 0:
+        acc += 1  # Increment accumulator for even numbers
+    return x * 2
+
+rdd.map(process).collect()
+
+# We can’t reliably read the value inside transformations (like map, filter).
+# Only read .value on the driver after all actions complete.
+# If a task fails and reruns, the accumulator may be incremented again, causing overcounting.
+# They are used as logging variables, not suited for conditionals, etc.
+# NOTE: Accumulators are not inmune to lazy evaluation! We need to .collect() to update them!
+print("Number of even numbers:", acc.value)
+# Number of even numbers: 2
+```
+
+Another option is **broadcast variables**, which are read-only variables that can be shared across all the workers. They are useful for sharing large datasets or configurations that do not change during the execution of the job.
+
+```python
+from pyspark import SparkContext
+
+# Use the existing SparkContext
+sc = SparkContext.getOrCreate()
+
+my_dict = {"item1": 1, "item2": 2, "item3": 3, "item4": 4} 
+my_list = ["item1", "item2", "item3", "item4"]
+
+my_dict_bc = sc.broadcast(my_dict)
+
+# .value gives access to the broadcasted object.
+# The broadcasted object is read-only.
+# Best used for lookups and small-to-medium data (< few 100MB).
+def my_func(letter):
+    return my_dict_bc.value[letter] 
+
+my_list_rdd = sc.parallelize(my_list)
+
+result = my_list_rdd.map(lambda x: my_func(x)).collect()
+
+print(result)
+# [1, 2, 3, 4]
+```
+
+Video: [How to Use Accumulators](https://www.youtube.com/watch?v=oV1PmKf9Spc).
+
+Notebook: [`05_Debugging/debugging_spark.ipynb`](./lab/05_Debugging/debugging_spark.ipynb).
+
+### Spark Web UI
+
+The Spark Web UI is a powerful tool for monitoring and debugging Spark applications.
+It provides insights into the configuration of the cluster and the execution of 
+
+- jobs of the DAG,
+- stages,
+- and tasks.
+
+![Spark WebUI](./pics/spark_web_ui.png)
+
+The `SparkContext` launches the Spark Web UI by default and it is available at port `4040` or `3000`:
+`http://<driver-node>:4040` (or `localhost:4040` if running locally).
+
+
 Videos:
 
-[How to Use Accumulators](https://www.youtube.com/watch?v=oV1PmKf9Spc)
-
-
+- [Spark Web UI](https://www.youtube.com/watch?v=9tK8QntvZso)
+- [Connecting to the Spark Web UI](https://www.youtube.com/watch?v=o_ZjFja3uiA)
+- [Getting Familiar With The Spark UI](https://www.youtube.com/watch?v=88JQIalP84M)
 
 ## 7. Machine Learning with PySpark
 
