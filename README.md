@@ -18,7 +18,5 @@ The repository is structured in folders/modules, which contain a Markdown file w
 
 To use this guide, open the desired topic folder and read the main Markdown in there; if you're new to the topic, follow a sequential order. To run the exercises and examples, you'll need to set up an environment either locally or remotely; all instructions for that should be provided in each folder/module.
 
-Finally, if you're looking for an **example project where the theory and examples are applied**, consider checking this project implemented with Spark: **[sparkify_customer_churn](https://github.com/mxagar/sparkify_customer_churn)**.
-
 Mikel Sagardia, 2023.  
 No guarantees.

@@ -121,8 +121,6 @@ Section videos:
 
 Video: [Project Overview](https://www.youtube.com/watch?v=lPCzCEG2yRs)
 
-I made a dedicated repository for the Udacity final project: [sparkify_customer_churn](https://github.com/mxagar/sparkify_customer_churn).
-
 All coding examples from this module are collected in that folder [`lab`](./lab/).
 
 Key ideas of the project:
