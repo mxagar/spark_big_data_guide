@@ -101,6 +101,8 @@ Table of contents:
   - [6. Debugging and Optimization](#6-debugging-and-optimization)
     - [Debugging](#debugging)
     - [Spark Web UI](#spark-web-ui)
+    - [Logging](#logging)
+    - [Code Optimization (for Distributed Systems)](#code-optimization-for-distributed-systems)
   - [7. Machine Learning with PySpark](#7-machine-learning-with-pyspark)
 
 
@@ -3012,6 +3014,16 @@ It provides insights into the configuration of the cluster and the execution of
 The `SparkContext` launches the Spark Web UI by default and it is available at port `4040` or `3000`:
 `http://<driver-node>:4040` (or `localhost:4040` if running locally).
 
+Elements in the Spark Web UI:
+
+- Tab Jobs: shows the list of jobs, their status, and execution time.
+- Tab Stages: shows the stages of the jobs, their status, and execution time. We can visualize the DAGs.
+- Tab Storage: shows the RDDs and DataFrames cached in memory.
+- Tab Environment: shows the configuration of the Spark application, including the Spark version, cluster manager, and environment variables.
+- Tab Executors: shows the list of executors, their status, memory usage, and disk usage.
+- Tab SQL: shows the executed SQL queries, their execution plans, and performance metrics.
+
+When we start a job and it takes longer than few seconds, we can monitor it in the Spark Web UI.
 
 Videos:
 
@@ -3019,6 +3031,157 @@ Videos:
 - [Connecting to the Spark Web UI](https://www.youtube.com/watch?v=o_ZjFja3uiA)
 - [Getting Familiar With The Spark UI](https://www.youtube.com/watch?v=88JQIalP84M)
 
+### Logging
+
+Spark uses the **log4j** library for logging, which is a popular logging framework in the Java ecosystem.
+
+We can set the **logging level** in our code as follows:
+
+```python
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName("MyApp").getOrCreate()
+spark.sparkContext.setLogLevel("INFO")  # ERROR, WARN, INFO, DEBUG, or ALL
+```
+
+Then:
+
+- In a Jupyter Docker setup, logs appear in the terminal where you launched the container.
+- In Spark standalone/cluster mode, logs are stored in files (e.g., `$SPARK_HOME/logs/`) or via configured logging sinks like `log4j`.
+
+Video: [Logging in Spark](https://www.youtube.com/watch?v=2H8jTcxamlU).
+
+### Code Optimization (for Distributed Systems)
+
+Distributed systems have particularities that we need to consider when optimizing code.
+
+**Data Skewness** occurs when the data is not evenly distributed across the partitions, leading to some tasks taking much longer than others. Causes:
+
+- Pareto principle: 80% of the data comes from 20% of sources.
+- For instance, the distribution of song plays in the Sparkify dataset is skewed towards a few songs.
+
+Once we identify skewness, we can apply techniques to mitigate it:
+
+- Change workload division
+- Partition the data
+
+Script to **explore skewness** in the dataset:
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import year, month
+
+def explore_dataframe():
+    spark = SparkSession.builder.appName("Skewness Introduction").getOrCreate()
+
+    # Provide your S3 file path here (use s3a:// if needed)
+    input_path = "s3a://your-bucket-name/parking_violation.csv"
+
+    # Read CSV into DataFrame
+    df = spark.read.format("csv").option("header", True).load(input_path)
+
+    # Investigate columns
+    col_list = df.columns
+    print("Columns in dataset:", col_list)
+
+    # Convert date column to date type
+    df = df.withColumn("issue_date", df["issue_date"].cast("date"))
+
+    # Group by year and month to count violations
+    year_df = df.groupBy(year("issue_date").alias("year")).count()
+    month_df = df.groupBy(month("issue_date").alias("month")).count()
+
+    # Show sample output
+    print("Violations per year:")
+    year_df.show()
+    print("Violations per month:")
+    month_df.show()
+
+    # Write partitioned output by year (to inspect skew in Spark UI)
+    output_path = "s3a://your-bucket-name/parking_output_partitioned"
+
+    # Use repartition to control parallelism (e.g., by year)
+    df = df.withColumn("year", year("issue_date"))
+    df.repartition("year") \
+      .write \
+      .partitionBy("year") \
+      .mode("overwrite") \
+      .parquet(output_path)  # parquet is better for performance
+
+    print("Output written to:", output_path)
+
+if __name__ == "__main__":
+    explore_dataframe()
+```
+
+Script to **repartition** the DataFrame to mitigate skewness:
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import year
+
+def repartition():
+    spark = (
+        SparkSession.builder
+        .appName("Repartition Example")
+        .getOrCreate()
+    )
+    spark.sparkContext.setLogLevel("WARN")
+
+    # Read the raw CSV from S3 (or local)
+    input_path = "s3a://your-bucket/parking_violation.csv"  # TODO: change
+    df = (
+        spark.read.format("csv")
+        .option("header", True)
+        .option("inferSchema", True)
+        .load(input_path)
+    )
+
+    print("Initial partitions :", df.rdd.getNumPartitions())
+    print("Row count          :", df.count())
+
+    # Minimal transform: extract `year` from a date column ──────
+    df = df.withColumn("year", year("issue_date"))
+
+    # ACTION #1 – write partitioned by year (default partitions)
+    # Check the **Executors** tab while this runs.
+    output_default = "s3a://your-bucket/out_default"        # TODO: change
+    (
+        df.write
+        .mode("overwrite")
+        .partitionBy("year")
+        .csv(output_default)
+    )
+
+    # Repartition so each executor gets more balanced work
+    # Prefer `repartition(<cols>)` or `repartition(<n>, <cols>)`
+    num_workers = 4          # TODO: set to the number of executors
+    df_balanced = df.repartition(num_workers, "year")
+
+    print("After repartition  :", df_balanced.rdd.getNumPartitions())
+
+    # ACTION #2 – write again, now using the balanced DF
+    # Watch the Executors tab: tasks should spread evenly.
+    output_balanced = "s3a://your-bucket/out_balanced"      # TODO: change
+    (
+        df_balanced.write
+        .mode("overwrite")
+        .csv(output_balanced)
+    )
+
+    print("Done!  Explore the Spark UI ( Jobs ▸ Stages ▸ Executors )")
+
+    # Keep session alive a bit so the UI sticks around
+    import time; time.sleep(300)
+
+if __name__ == "__main__":
+    repartition()
+```
+
+Videos:
+
+- [Code Optimization: Skewness](https://www.youtube.com/watch?v=uoS77glXLZw)
+- [Repartitioning DataFrames](https://www.youtube.com/watch?v=OPmsTEiYPug)
+
 ## 7. Machine Learning with PySpark
 
-
+See [3.3 Introduction to Machine Learning Pipelines](#33-introduction-to-machine-learning-pipelines).
